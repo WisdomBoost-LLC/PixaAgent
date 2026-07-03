@@ -7,4 +7,13 @@ export type AgentEvent =
   | { type: "changeset-updated"; files: { path: string; status: string }[] }
   | { type: "approval-request"; requestId: string; kind: "command" | "commit"; detail: string }
   | { type: "status"; text: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | {
+      type: "usage";
+      /** null when the provider didn't report a dollar cost for this request (e.g. some free models). */
+      requestCostUsd: number | null;
+      /** Running total for the current session, reset on New Session. */
+      sessionCostUsd: number;
+      promptTokens: number;
+      completionTokens: number;
+    };

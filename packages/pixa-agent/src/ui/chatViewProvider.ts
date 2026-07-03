@@ -231,6 +231,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   <div id="app">
     <div id="header">
       <select id="model-select" title="Model"></select>
+      <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
       <button id="new-session" title="New session">＋</button>
     </div>
     <div id="messages"></div>

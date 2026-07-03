@@ -27,11 +27,13 @@ export interface AgentLoopDeps {
  */
 export class AgentLoop {
   readonly history: ChatMessage[] = [];
+  private sessionCostUsd = 0;
 
   constructor(private deps: AgentLoopDeps) {}
 
   reset(): void {
     this.history.length = 0;
+    this.sessionCostUsd = 0;
   }
 
   /** Call the provider, absorbing transient 429s with the server's suggested wait. */
@@ -90,6 +92,18 @@ export class AgentLoop {
           },
           signal
         );
+
+        if (result.usage) {
+          const requestCostUsd = result.usage.costUsd;
+          if (requestCostUsd !== null) this.sessionCostUsd += requestCostUsd;
+          ctx.emit({
+            type: "usage",
+            requestCostUsd,
+            sessionCostUsd: this.sessionCostUsd,
+            promptTokens: result.usage.promptTokens,
+            completionTokens: result.usage.completionTokens,
+          });
+        }
 
         if (result.toolCalls.length === 0) {
           this.history.push({ role: "assistant", content: result.content });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSseChunk, accumulateToolCallDelta, type ToolCallAccumulator } from "../src/providers/openrouter";
+import { parseSseChunk, accumulateToolCallDelta, extractUsage, type ToolCallAccumulator } from "../src/providers/openrouter";
 
 describe("parseSseChunk", () => {
   it("splits complete events and keeps partial tail", () => {
@@ -37,5 +37,26 @@ describe("accumulateToolCallDelta", () => {
       { id: "call_1", name: "read_file", arguments: '{"path":"a.ts"}' },
       { id: "call_2", name: "list_directory", arguments: "{}" },
     ]);
+  });
+});
+
+describe("extractUsage", () => {
+  it("returns null when no usage field is present", () => {
+    expect(extractUsage({ choices: [{}] })).toBeNull();
+  });
+
+  it("parses prompt/completion/total tokens and real cost", () => {
+    const parsed = { usage: { prompt_tokens: 120, completion_tokens: 340, total_tokens: 460, cost: 0.000821 } };
+    expect(extractUsage(parsed)).toEqual({
+      promptTokens: 120,
+      completionTokens: 340,
+      totalTokens: 460,
+      costUsd: 0.000821,
+    });
+  });
+
+  it("reports costUsd as null (not 0) when the provider omits cost", () => {
+    const parsed = { usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } };
+    expect(extractUsage(parsed)?.costUsd).toBeNull();
   });
 });

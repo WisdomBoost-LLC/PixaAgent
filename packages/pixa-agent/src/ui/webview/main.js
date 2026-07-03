@@ -39,6 +39,13 @@
     return el;
   }
 
+  // OpenRouter returns real billed cost, not an estimate; costs are tiny so show more precision below a cent.
+  function formatCost(n) {
+    if (n === null || n === undefined) return "—";
+    if (n === 0) return "$0.00";
+    return "$" + n.toFixed(n < 0.01 ? 6 : 4);
+  }
+
   function ensureAssistantEl() {
     if (!currentAssistantEl) {
       currentAssistantEl = addMessage("assistant", "");
@@ -128,6 +135,18 @@
       case "changeset-updated":
         renderChangeSet(msg.files);
         break;
+      case "usage": {
+        $("session-cost").textContent = formatCost(msg.sessionCostUsd);
+        const perTurn =
+          msg.requestCostUsd === null
+            ? "usage: " + msg.promptTokens + " in / " + msg.completionTokens + " out tok (this model doesn't report cost)"
+            : "usage: " +
+              formatCost(msg.requestCostUsd) +
+              " (" + msg.promptTokens + " in / " + msg.completionTokens + " out tok) · session total " +
+              formatCost(msg.sessionCostUsd);
+        addMessage("cost", escapeHtml(perTurn));
+        break;
+      }
       case "status":
         addMessage("status", escapeHtml(msg.text));
         currentAssistantEl = null;
@@ -192,6 +211,7 @@
   );
   $("new-session").addEventListener("click", () => {
     messagesEl.innerHTML = "";
+    $("session-cost").textContent = formatCost(0);
     vscode.postMessage({ type: "new-session" });
   });
   $("apply-all").addEventListener("click", () =>

@@ -5,6 +5,7 @@ import type {
   ModelProvider,
   StreamDelta,
   ToolCall,
+  UsageInfo,
 } from "./types";
 import { RateLimitError } from "./errors";
 
@@ -56,6 +57,23 @@ export function accumulateToolCallDelta(
   }
 }
 
+/**
+ * Extract OpenRouter's usage-accounting block from a parsed SSE chunk, if present.
+ * Requires `usage: { include: true }` in the request. `cost` is the provider's actual
+ * billed USD amount for the request — null (not 0) means the field was absent, e.g.
+ * some free models don't report it.
+ */
+export function extractUsage(parsed: any): UsageInfo | null {
+  const u = parsed?.usage;
+  if (!u || typeof u !== "object") return null;
+  return {
+    promptTokens: Number(u.prompt_tokens) || 0,
+    completionTokens: Number(u.completion_tokens) || 0,
+    totalTokens: Number(u.total_tokens) || 0,
+    costUsd: typeof u.cost === "number" ? u.cost : null,
+  };
+}
+
 /* ---------- OpenAI-compatible wire mapping ---------- */
 
 interface WireMessage {
@@ -104,6 +122,7 @@ export class OpenRouterProvider implements ModelProvider {
       stream: true,
       temperature: req.temperature ?? 0.2,
       max_tokens: req.maxTokens ?? 8192,
+      usage: { include: true },
       tools: req.tools.length
         ? req.tools.map((t) => ({
             type: "function",
@@ -138,6 +157,7 @@ export class OpenRouterProvider implements ModelProvider {
     let buffer = "";
     let content = "";
     let finishReason = "stop";
+    let usage: UsageInfo | null = null;
     const toolAcc: ToolCallAccumulator = {};
 
     for (;;) {
@@ -163,6 +183,8 @@ export class OpenRouterProvider implements ModelProvider {
           }
           throw new Error(`OpenRouter: ${parsed.error.message ?? JSON.stringify(parsed.error)}`);
         }
+        const chunkUsage = extractUsage(parsed);
+        if (chunkUsage) usage = chunkUsage;
         const choice = parsed.choices?.[0];
         if (!choice) continue;
         const delta = choice.delta ?? {};
@@ -183,7 +205,7 @@ export class OpenRouterProvider implements ModelProvider {
       .map((i) => toolAcc[i])
       .filter((c) => c.name);
 
-    return { content, toolCalls, finishReason };
+    return { content, toolCalls, finishReason, usage };
   }
 }
 

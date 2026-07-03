@@ -45,10 +45,19 @@ export interface StreamDelta {
   text?: string;
 }
 
+/** Token/cost accounting for one request. costUsd is the provider's actual billed amount when available. */
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number | null;
+}
+
 export interface ChatResult {
   content: string;
   toolCalls: ToolCall[];
   finishReason: string;
+  usage?: UsageInfo | null;
 }
 
 export interface ModelProvider {
