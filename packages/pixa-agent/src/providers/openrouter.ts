@@ -6,6 +6,7 @@ import type {
   StreamDelta,
   ToolCall,
 } from "./types";
+import { RateLimitError } from "./errors";
 
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -123,9 +124,13 @@ export class OpenRouterProvider implements ModelProvider {
       body: JSON.stringify(body),
     });
 
+    if (res.status === 429) {
+      const text = await res.text().catch(() => "");
+      throw new RateLimitError(parseRetryAfter(res.headers.get("retry-after"), text), friendlyError(429, text));
+    }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
-      throw new Error(`OpenRouter error ${res.status}: ${truncate(text, 500)}`);
+      throw new Error(friendlyError(res.status, text));
     }
 
     const reader = res.body.getReader();
@@ -150,6 +155,12 @@ export class OpenRouterProvider implements ModelProvider {
           continue; // partial/garbled event — skip
         }
         if (parsed.error) {
+          if (parsed.error.code === 429) {
+            throw new RateLimitError(
+              Number(parsed.error.metadata?.retry_after_seconds) || 30,
+              friendlyError(429, JSON.stringify(parsed.error))
+            );
+          }
           throw new Error(`OpenRouter: ${parsed.error.message ?? JSON.stringify(parsed.error)}`);
         }
         const choice = parsed.choices?.[0];
@@ -178,4 +189,41 @@ export class OpenRouterProvider implements ModelProvider {
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+/** Prefer the Retry-After header, then the body's retry_after_seconds, else a safe default. */
+export function parseRetryAfter(header: string | null, body: string): number {
+  const fromHeader = header ? Number(header) : NaN;
+  if (Number.isFinite(fromHeader) && fromHeader > 0) return fromHeader;
+  try {
+    const j = JSON.parse(body);
+    const s = Number(j?.error?.metadata?.retry_after_seconds);
+    if (Number.isFinite(s) && s > 0) return s;
+  } catch {
+    // ignore
+  }
+  return 30;
+}
+
+/** Turn OpenRouter's raw error JSON into a short, human-readable line. */
+export function friendlyError(status: number, body: string): string {
+  let inner = "";
+  try {
+    inner = JSON.parse(body)?.error?.message ?? "";
+  } catch {
+    inner = "";
+  }
+  const base = inner || truncate(body, 300);
+  switch (status) {
+    case 429:
+      return `Rate limited by the provider. Free models share a global quota — ${base}`;
+    case 402:
+      return `Out of credits for this model: ${base} Lower pixa.maxTokens, switch to a free model, or add credit at openrouter.ai/settings/credits.`;
+    case 401:
+      return `Auth failed (401). Re-run "Pixa: Set OpenRouter API Key". ${base}`;
+    case 404:
+      return `Model not found (404): ${base} The slug may be retired — pick another model.`;
+    default:
+      return `OpenRouter error ${status}: ${base}`;
+  }
 }

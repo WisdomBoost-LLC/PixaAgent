@@ -1,5 +1,6 @@
-import type { ChatMessage, ModelEntry } from "../providers/types";
+import type { ChatMessage, ChatResult, ChatRequest, ModelProvider, StreamDelta, ModelEntry } from "../providers/types";
 import { ProviderRegistry } from "../providers/registry";
+import { RateLimitError } from "../providers/errors";
 import { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
@@ -7,6 +8,8 @@ import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
+const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RETRY_WAIT_SECONDS = 60;
 
 export interface AgentLoopDeps {
   registry: ProviderRegistry;
@@ -31,6 +34,31 @@ export class AgentLoop {
     this.history.length = 0;
   }
 
+  /** Call the provider, absorbing transient 429s with the server's suggested wait. */
+  private async chatWithRetry(
+    provider: ModelProvider,
+    request: ChatRequest,
+    onDelta: (d: StreamDelta) => void,
+    signal: AbortSignal
+  ): Promise<ChatResult> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await provider.chat(request, onDelta, signal);
+      } catch (e) {
+        if (e instanceof RateLimitError && attempt < MAX_RATE_LIMIT_RETRIES && !signal.aborted) {
+          const wait = Math.min(Math.max(Math.ceil(e.retryAfterSeconds), 1), MAX_RETRY_WAIT_SECONDS);
+          this.deps.ctx.emit({
+            type: "status",
+            text: `Free-tier rate limit hit — retrying in ${wait}s (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES}). Switch model or add an OpenRouter key to avoid this.`,
+          });
+          await delay(wait * 1000, signal);
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
   async run(userMessage: string, modelId: string, signal: AbortSignal): Promise<void> {
     const { registry, tools, models, ctx } = this.deps;
     try {
@@ -49,7 +77,8 @@ export class AgentLoop {
         if (signal.aborted) throw abortError();
 
         const messages = [system, ...pruneHistory(this.history, budget)];
-        const result = await provider.chat(
+        const result = await this.chatWithRetry(
+          provider,
           {
             model: entry.slug,
             messages,
@@ -119,6 +148,22 @@ function summarizeArgs(argsJson: string): string {
 
 function truncateForUi(s: string): string {
   return s.length > 1500 ? s.slice(0, 1500) + "\n… (truncated in UI — full result sent to model)" : s;
+}
+
+/** Cancellable sleep — resolves after ms, or rejects immediately if the signal aborts. */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(abortError());
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(abortError());
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function abortError(): Error {
