@@ -1,0 +1,10 @@
+/** Events emitted by the agent runtime; the chat webview renders these directly. */
+export type AgentEvent =
+  | { type: "assistant-delta"; text: string }
+  | { type: "assistant-done" }
+  | { type: "tool-start"; callId: string; name: string; summary: string }
+  | { type: "tool-end"; callId: string; result: string }
+  | { type: "changeset-updated"; files: { path: string; status: string }[] }
+  | { type: "approval-request"; requestId: string; kind: "command" | "commit"; detail: string }
+  | { type: "status"; text: string }
+  | { type: "error"; message: string };
