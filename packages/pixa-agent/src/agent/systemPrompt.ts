@@ -2,13 +2,23 @@ export interface WorkspaceInfo {
   workspaceName: string;
   os: string;
   projectMap: string;
+  /** Workspace-relative path of the file focused in the editor, if any. */
+  activeFile?: string;
+  /** Currently selected text in that file (already capped by the caller). */
+  selection?: string;
 }
 
 export function buildSystemPrompt(info: WorkspaceInfo): string {
   return `You are Pixa Agent, an expert AI coding agent working inside the Pixa IDE on the user's real workspace.
 
 Workspace: ${info.workspaceName}
-Operating system: ${info.os}
+Operating system: ${info.os}${
+    info.activeFile
+      ? `\nFile currently open in the user's editor: ${info.activeFile}${
+          info.selection ? `\nUser's current selection in that file:\n\`\`\`\n${info.selection}\n\`\`\`` : ""
+        }`
+      : ""
+  }
 
 # How you work
 - You accomplish tasks by calling tools. NEVER assume what a file contains — read or search it first.

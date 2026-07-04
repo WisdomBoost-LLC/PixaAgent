@@ -12,6 +12,7 @@ import { ChangeSet } from "../edits/changeSet";
 import type { RepoIndex } from "../indexer/types";
 import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
+import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 
 /** Messages the webview sends to the extension host. */
 type WebviewMessage =
@@ -63,10 +64,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       tools: this.tools,
       models: this.models,
       ctx,
-      workspaceInfo: async () => ({
-        workspaceName: path.basename(this.workspaceRoot),
-        os: `${os.type()} ${os.release()} (${os.platform()})`,
-      }),
+      workspaceInfo: async () => {
+        const editor = vscode.window.activeTextEditor;
+        let activeFile: string | undefined;
+        let selection: string | undefined;
+        if (editor && editor.document.uri.scheme === "file") {
+          const rel = path.relative(this.workspaceRoot, editor.document.uri.fsPath);
+          if (rel && !rel.startsWith("..")) {
+            activeFile = rel.split(path.sep).join("/");
+            const selected = editor.document.getText(editor.selection);
+            if (selected.trim()) selection = selected.slice(0, 2000);
+          }
+        }
+        return {
+          workspaceName: path.basename(this.workspaceRoot),
+          os: `${os.type()} ${os.release()} (${os.platform()})`,
+          activeFile,
+          selection,
+        };
+      },
       maxTokens: () => vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ?? 8192,
     });
   }
@@ -123,7 +139,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         this.running = true;
         this.abort = new AbortController();
         try {
-          await this.loop.run(msg.text, this.currentModelId, this.abort.signal);
+          const text = await this.resolveMentions(msg.text);
+          await this.loop.run(text, this.currentModelId, this.abort.signal);
         } finally {
           this.running = false;
           this.post({ type: "run-finished" } as any);
@@ -199,6 +216,39 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     this.diffPreview.invalidate(relPath);
   }
 
+  /** Resolve @path mentions against workspace files and append their contents. */
+  private async resolveMentions(text: string): Promise<string> {
+    const mentions = parseMentions(text);
+    if (mentions.length === 0) return text;
+    const attached: AttachedFile[] = [];
+    const unresolved: string[] = [];
+    for (const mention of mentions) {
+      try {
+        const norm = mention.replace(/\\/g, "/");
+        // Exact relative path first, then a suffix match anywhere in the workspace.
+        let uri: vscode.Uri | undefined;
+        const exact = vscode.Uri.file(path.join(this.workspaceRoot, norm));
+        try {
+          await vscode.workspace.fs.stat(exact);
+          uri = exact;
+        } catch {
+          const found = await vscode.workspace.findFiles(`**/${norm}`, "**/node_modules/**", 1);
+          uri = found[0];
+        }
+        if (!uri) {
+          unresolved.push(mention);
+          continue;
+        }
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const rel = path.relative(this.workspaceRoot, uri.fsPath).split(path.sep).join("/");
+        attached.push({ path: rel, content: Buffer.from(bytes).toString("utf8") });
+      } catch {
+        unresolved.push(mention);
+      }
+    }
+    return text + formatAttachedFiles(attached, unresolved);
+  }
+
   private postChangeSet(): void {
     this.post({
       type: "changeset-updated",
@@ -246,7 +296,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       <div id="api-key-warning" class="hidden">
         No API key set. <a href="#" id="set-key-link">Set OpenRouter API key</a>
       </div>
-      <textarea id="input" rows="3" placeholder="Describe a task… (Enter to send, Shift+Enter for newline)"></textarea>
+      <textarea id="input" rows="3" placeholder="Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)"></textarea>
       <div id="composer-actions">
         <button id="stop" class="hidden">Stop</button>
         <button id="send">Send</button>
