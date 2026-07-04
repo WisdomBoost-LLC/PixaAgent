@@ -4,6 +4,7 @@ import { fsTools } from "./fs";
 import { searchTools } from "./search";
 import { terminalTools } from "./terminal";
 import { gitTools } from "./git";
+import { diagnosticsTools } from "./diagnostics";
 
 /**
  * Plugin point for agent capabilities: future features (MCP client, test
@@ -41,7 +42,7 @@ export class ToolRegistry {
 }
 
 export function registerBuiltinTools(reg: ToolRegistry): void {
-  for (const t of [...fsTools, ...searchTools, ...terminalTools, ...gitTools]) {
+  for (const t of [...fsTools, ...searchTools, ...terminalTools, ...gitTools, ...diagnosticsTools]) {
     reg.register(t);
   }
 }
