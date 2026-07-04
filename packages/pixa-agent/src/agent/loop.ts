@@ -59,7 +59,7 @@ export class AgentLoop {
       try {
         return await provider.chat(request, onDelta, signal);
       } catch (e) {
-        if (e instanceof RateLimitError && attempt < MAX_RATE_LIMIT_RETRIES && !signal.aborted) {
+        if (e instanceof RateLimitError && e.scope === "upstream" && attempt < MAX_RATE_LIMIT_RETRIES && !signal.aborted) {
           const wait = Math.min(Math.max(Math.ceil(e.retryAfterSeconds), 1), MAX_RETRY_WAIT_SECONDS);
           this.deps.ctx.emit({
             type: "status",
@@ -108,8 +108,18 @@ export class AgentLoop {
             signal
           );
         } catch (e) {
-          // Free pools are per-model: when one is exhausted after retries,
-          // hop to the next free model and continue the same task.
+          // Account-wide free-tier quota: shared by ALL free models — hopping
+          // would only burn more of it. Tell the user what actually helps.
+          if (e instanceof RateLimitError && e.scope === "account") {
+            ctx.emit({
+              type: "error",
+              message:
+                "Your OpenRouter account's daily free-model quota is used up (shared across all free models — ~50/day under $10 lifetime top-up, 1000/day above). Options: switch to a paid model like GLM 5.2, top up to $10 total for the higher free cap, or wait for the daily reset.",
+            });
+            return;
+          }
+          // Per-model upstream pool exhausted: hop to the next free model
+          // and continue the same task.
           if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted) {
             const fallback = models.find(
               (m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id)

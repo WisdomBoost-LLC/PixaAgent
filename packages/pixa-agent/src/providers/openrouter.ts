@@ -7,7 +7,7 @@ import type {
   ToolCall,
   UsageInfo,
 } from "./types";
-import { RateLimitError } from "./errors";
+import { RateLimitError, classifyRateLimit } from "./errors";
 
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -145,7 +145,11 @@ export class OpenRouterProvider implements ModelProvider {
 
     if (res.status === 429) {
       const text = await res.text().catch(() => "");
-      throw new RateLimitError(parseRetryAfter(res.headers.get("retry-after"), text), friendlyError(429, text));
+      throw new RateLimitError(
+        parseRetryAfter(res.headers.get("retry-after"), text),
+        friendlyError(429, text),
+        classifyRateLimit(text)
+      );
     }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
@@ -176,9 +180,11 @@ export class OpenRouterProvider implements ModelProvider {
         }
         if (parsed.error) {
           if (parsed.error.code === 429) {
+            const raw = JSON.stringify(parsed.error);
             throw new RateLimitError(
               Number(parsed.error.metadata?.retry_after_seconds) || 30,
-              friendlyError(429, JSON.stringify(parsed.error))
+              friendlyError(429, raw),
+              classifyRateLimit(raw)
             );
           }
           throw new Error(`OpenRouter: ${parsed.error.message ?? JSON.stringify(parsed.error)}`);

@@ -108,6 +108,35 @@ describe("AgentLoop rate-limit retry", () => {
     expect(loop.history.at(-1)?.content).toBe("done on B");
   });
 
+  it("does NOT hop models on an account-wide quota — explains instead", async () => {
+    const modelA: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 100000, supportsTools: true };
+    const modelB: ModelEntry = { id: "b", label: "Free B", provider: "flaky", slug: "x/b:free", contextWindow: 100000, supportsTools: true };
+    let calls = 0;
+    const provider: ModelProvider = {
+      id: "flaky",
+      async chat(): Promise<ChatResult> {
+        calls++;
+        throw new RateLimitError(0, "daily free quota exceeded", "account");
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: [modelA, modelB],
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    await loop.run("hi", "a", new AbortController().signal);
+
+    expect(calls).toBe(1); // no retry, no hop — quota is account-wide
+    expect(events.some((e) => e.type === "status" && /switching/i.test(e.text))).toBe(false);
+    expect(events.some((e) => e.type === "error" && /daily free-model quota/i.test(e.message))).toBe(true);
+  });
+
   it("gives up after the retry cap and surfaces an error", async () => {
     const provider: ModelProvider = {
       id: "flaky",
