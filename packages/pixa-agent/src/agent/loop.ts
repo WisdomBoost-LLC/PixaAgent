@@ -36,6 +36,17 @@ export class AgentLoop {
     this.sessionCostUsd = 0;
   }
 
+  get sessionCost(): number {
+    return this.sessionCostUsd;
+  }
+
+  /** Rehydrate a persisted session (window reload). */
+  restore(history: ChatMessage[], sessionCostUsd: number): void {
+    this.history.length = 0;
+    this.history.push(...history);
+    this.sessionCostUsd = sessionCostUsd;
+  }
+
   /** Call the provider, absorbing transient 429s with the server's suggested wait. */
   private async chatWithRetry(
     provider: ModelProvider,

@@ -80,6 +80,17 @@
       case "api-key-status":
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
+      case "transcript": {
+        messagesEl.innerHTML = "";
+        for (const entry of msg.entries) {
+          addMessage(entry.role === "user" ? "user" : "assistant", renderMarkdown(entry.text));
+        }
+        if (typeof msg.sessionCostUsd === "number") {
+          $("session-cost").textContent = formatCost(msg.sessionCostUsd);
+        }
+        currentAssistantEl = null;
+        break;
+      }
       case "assistant-delta": {
         const el = ensureAssistantEl();
         el.dataset.raw += msg.text;

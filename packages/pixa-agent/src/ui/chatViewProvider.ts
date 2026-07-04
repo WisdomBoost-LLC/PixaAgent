@@ -13,6 +13,14 @@ import type { RepoIndex } from "../indexer/types";
 import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
+import type { ChatMessage } from "../providers/types";
+
+const SESSION_STATE_KEY = "pixa.session.v1";
+
+interface PersistedSession {
+  history: ChatMessage[];
+  sessionCostUsd: number;
+}
 
 /** Messages the webview sends to the extension host. */
 type WebviewMessage =
@@ -118,7 +126,38 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     this.abort?.abort();
     this.loop.reset();
     this.changeSet.clearResolved();
+    void this.context.workspaceState.update(SESSION_STATE_KEY, undefined);
     this.post({ type: "status", text: "New session started." });
+  }
+
+  private saveSession(): void {
+    const state: PersistedSession = {
+      history: this.loop.history.slice(-200), // bound growth; context manager prunes anyway
+      sessionCostUsd: this.loop.sessionCost,
+    };
+    void this.context.workspaceState.update(SESSION_STATE_KEY, state);
+  }
+
+  /** Rehydrate the loop and replay a readable transcript into the webview. */
+  private restoreSession(): void {
+    if (this.loop.history.length > 0) {
+      this.post({ type: "transcript", entries: this.transcript() } as any);
+      return; // live in-memory session (panel was just hidden, not reloaded)
+    }
+    const saved = this.context.workspaceState.get<PersistedSession>(SESSION_STATE_KEY);
+    if (!saved || !Array.isArray(saved.history) || saved.history.length === 0) return;
+    this.loop.restore(saved.history, saved.sessionCostUsd ?? 0);
+    this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+  }
+
+  private transcript(): { role: string; text: string }[] {
+    return this.loop.history
+      .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim())
+      .map((m) => ({
+        role: m.role,
+        // Hide bulky attached-file blocks from the replayed view.
+        text: m.content.replace(/\n*<attached-files>[\s\S]*<\/attached-files>/, " [attached files]"),
+      }));
   }
 
   private async onMessage(msg: WebviewMessage): Promise<void> {
@@ -131,6 +170,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           currentModelId: this.currentModelId,
           hasApiKey,
         } as any);
+        this.restoreSession();
         this.postChangeSet();
         break;
       }
@@ -144,6 +184,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         } finally {
           this.running = false;
           this.post({ type: "run-finished" } as any);
+          this.saveSession();
         }
         break;
       }
