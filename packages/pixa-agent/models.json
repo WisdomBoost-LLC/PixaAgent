@@ -1,35 +1,27 @@
 {
   "models": [
     {
-      "id": "nemotron-ultra-free",
-      "label": "Nemotron 3 Ultra 550B — Free",
-      "provider": "openrouter",
-      "slug": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "contextWindow": 1000000,
-      "supportsTools": true
-    },
-    {
-      "id": "gpt-oss-free",
-      "label": "GPT-OSS 120B — Free",
-      "provider": "openrouter",
-      "slug": "openai/gpt-oss-120b:free",
-      "contextWindow": 131072,
-      "supportsTools": true
-    },
-    {
-      "id": "qwen-coder-free",
-      "label": "Qwen3 Coder — Free",
-      "provider": "openrouter",
-      "slug": "qwen/qwen3-coder:free",
-      "contextWindow": 1048576,
-      "supportsTools": true
-    },
-    {
       "id": "nemotron-free",
       "label": "Nemotron 3 Super 120B — Free",
       "provider": "openrouter",
       "slug": "nvidia/nemotron-3-super-120b-a12b:free",
       "contextWindow": 1000000,
+      "supportsTools": true
+    },
+    {
+      "id": "laguna-m-free",
+      "label": "Poolside Laguna M.1 — Free",
+      "provider": "openrouter",
+      "slug": "poolside/laguna-m.1:free",
+      "contextWindow": 262144,
+      "supportsTools": true
+    },
+    {
+      "id": "laguna-xs-free",
+      "label": "Poolside Laguna XS 2.1 — Free",
+      "provider": "openrouter",
+      "slug": "poolside/laguna-xs-2.1:free",
+      "contextWindow": 262144,
       "supportsTools": true
     },
     {
@@ -41,59 +33,11 @@
       "supportsTools": true
     },
     {
-      "id": "llama-free",
-      "label": "Llama 3.3 70B — Free",
-      "provider": "openrouter",
-      "slug": "meta-llama/llama-3.3-70b-instruct:free",
-      "contextWindow": 131072,
-      "supportsTools": true
-    },
-    {
-      "id": "gemma-free",
-      "label": "Gemma 4 31B — Free",
-      "provider": "openrouter",
-      "slug": "google/gemma-4-31b-it:free",
-      "contextWindow": 262144,
-      "supportsTools": true
-    },
-    {
-      "id": "qwen-next-free",
-      "label": "Qwen3 Next 80B — Free",
-      "provider": "openrouter",
-      "slug": "qwen/qwen3-next-80b-a3b-instruct:free",
-      "contextWindow": 262144,
-      "supportsTools": true
-    },
-    {
-      "id": "poolside-free",
-      "label": "Poolside Laguna M.1 — Free",
-      "provider": "openrouter",
-      "slug": "poolside/laguna-m.1:free",
-      "contextWindow": 262144,
-      "supportsTools": true
-    },
-    {
-      "id": "router-free",
-      "label": "OpenRouter Free-Model Router",
-      "provider": "openrouter",
-      "slug": "openrouter/free",
-      "contextWindow": 200000,
-      "supportsTools": true
-    },
-    {
       "id": "glm",
       "label": "GLM 5.2 — Paid",
       "provider": "openrouter",
       "slug": "z-ai/glm-5.2",
       "contextWindow": 1048576,
-      "supportsTools": true
-    },
-    {
-      "id": "deepseek",
-      "label": "DeepSeek V3.1 — Paid (budget)",
-      "provider": "openrouter",
-      "slug": "deepseek/deepseek-chat-v3.1",
-      "contextWindow": 163840,
       "supportsTools": true
     },
     {
@@ -113,11 +57,19 @@
       "supportsTools": true
     },
     {
-      "id": "gemini",
-      "label": "Gemini 2.5 Pro — Paid",
+      "id": "qwen-coder",
+      "label": "Qwen3 Coder — Paid",
       "provider": "openrouter",
-      "slug": "google/gemini-2.5-pro",
+      "slug": "qwen/qwen3-coder",
       "contextWindow": 1048576,
+      "supportsTools": true
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek V3.1 — Paid (budget)",
+      "provider": "openrouter",
+      "slug": "deepseek/deepseek-chat-v3.1",
+      "contextWindow": 163840,
       "supportsTools": true
     }
   ]

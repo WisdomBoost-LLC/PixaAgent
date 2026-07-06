@@ -116,8 +116,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   }
 
   private resolveDefaultModelId(): string {
-    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-ultra-free";
-    return this.models.some((m) => m.id === configured) ? configured : this.models[0]?.id ?? "nemotron-ultra-free";
+    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-free";
+    return this.models.some((m) => m.id === configured) ? configured : this.models[0]?.id ?? "nemotron-free";
   }
 
   /* ---------- ApprovalService ---------- */
