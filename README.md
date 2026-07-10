@@ -23,21 +23,60 @@ via the `ide/` pipeline.
                OpenRouter → GLM / Qwen / DeepSeek / Claude / GPT / Gemini
 ```
 
-## Quickstart (development)
+> **This is the OpenRouter-only build (v0.3.8).** It uses a single provider —
+> OpenRouter — for all models. No NVIDIA/other backends. This is the stable
+> baseline for the team to work from.
 
+## Getting started (team onboarding)
+
+### Prerequisites
+- **Node.js 20+** ([nodejs.org](https://nodejs.org)) — check with `node -v`
+- **VS Code** ([code.visualstudio.com](https://code.visualstudio.com))
+- **Git**
+- An **OpenRouter account + API key** — free to create at
+  [openrouter.ai/keys](https://openrouter.ai/keys). Each person uses their own
+  key; usage and billing stay per-person. Free models exist; paid models
+  (e.g. GLM 5.2) need a few dollars of credit.
+
+### 1. Clone and build
 ```bash
+git clone <this-repo-url>
+cd pixa            # or the folder git created
 npm install
 npm run compile
 ```
 
-Open this repo in VS Code, press **F5** ("Run Pixa Agent"). In the dev host:
+### 2. Run it — two ways
 
+**A) Dev mode (for working on the code):**
+Open the repo folder in VS Code and press **F5** ("Run Pixa Agent"). A second
+VS Code window (the Extension Development Host) launches with Pixa loaded. Any
+code change → stop (Shift+F5) and press F5 again, or run `npm run watch`.
+
+**B) Install it as a real extension (to just use it):**
+```bash
+npm run package -w pixa-agent          # produces packages/pixa-agent/pixa-agent-<version>.vsix
+code --install-extension packages/pixa-agent/pixa-agent-0.3.8.vsix --force
+```
+Then restart VS Code — the Pixa icon appears in the activity bar permanently.
+
+### 3. First use
 1. Open any project folder.
-2. Command palette → **Pixa: Set OpenRouter API Key** (get one at openrouter.ai/keys).
-3. Click the Pixa icon in the activity bar, pick a model, describe a task.
+2. Command palette (`Ctrl+Shift+P`) → **Pixa: Set OpenRouter API Key** → paste your key.
+3. Click the **Pixa icon** in the activity bar, pick a model from the dropdown,
+   and describe a task.
 
 File edits appear as a reviewable change set (Diff / Apply / Reject); every
 terminal command and git commit asks for your approval first.
+
+### Common commands
+```bash
+npm run compile -w pixa-agent    # build the extension bundle
+npm run watch   -w pixa-agent    # rebuild on save (dev)
+npm run test    -w pixa-agent    # run the test suite (vitest)
+npm run typecheck -w pixa-agent  # TypeScript check, no emit
+npm run package -w pixa-agent    # build the installable .vsix
+```
 
 ## Design guarantees
 
