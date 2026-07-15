@@ -1,5 +1,8 @@
+import type { PlanStep } from "./planning";
+
 /** Events emitted by the agent runtime; the chat webview renders these directly. */
 export type AgentEvent =
+  | { type: "plan"; steps: PlanStep[] }
   | { type: "assistant-delta"; text: string }
   | { type: "assistant-done" }
   | { type: "tool-start"; callId: string; name: string; summary: string }
