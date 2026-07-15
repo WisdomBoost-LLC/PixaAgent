@@ -131,10 +131,51 @@ npm run typecheck
 - **Revert** — applied changes can be rolled back from the change-set panel
 - **Cost tracking** — OpenRouter's real billed $ per request + session total
 
-## Roadmap (v3+)
+## Roadmap
 
-Inline tab completion · embedding/semantic index · long-term
-memory · multi-agent workflows · cloud workspaces · enterprise collaboration.
+Pixa is moving from a working prototype to a production-grade AI coding
+assistant — an internal alternative to Cursor / Copilot / Claude Code that the
+team owns end to end. The long-term goal is a coding assistant as capable as
+the market leaders, running on models we control (eventually a self-hosted
+60–70B model), with full cost transparency and no code leaving our
+infrastructure.
+
+### Phases
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **0 · Foundation** | Agent loop, tools, provider layer, safety rails | ✅ Done |
+| **1 · Core hardening** | Command sandboxing, secret redaction, audit log, Workspace Trust | Planned |
+| **2 · Retrieval** | Embedding-based semantic index, project memory, chunked retrieval | Planned |
+| **3 · IDE integration** | Inline (ghost-text) completion, in-editor diffs, keyboard accept/reject | Planned |
+| **4 · Agent system** | Multi-step planning, `TaskGraph`, parallel safe tools, plan preview | Planned |
+| **5 · Enterprise** | Inference gateway, admin dashboard, org policy (only at 100+ users) | Later |
+| **6 · Performance** | Latency-aware routing, streaming diffs, parallel calls | Later |
+| **7 · Polish & launch** | CI/CD, private registry, auto-update, onboarding | Later |
+
+### Team division (Wave 1 — Phases 1–5 in parallel)
+
+Each track sits behind a clean existing interface, so all five people build in
+parallel without colliding. The only shared seam (retrieval ↔ agent) meets at
+the `RepoIndex` interface.
+
+| Owner | Track | Scope |
+|-------|-------|-------|
+| **Dev A (lead)** | Agent system (Phase 4) | Planning pre-pass, `TaskGraph`, parallel tool execution, plan-preview UI, checkpoint/resume — plus integration & PR review |
+| **Dev B** | Retrieval (Phase 2) | `EmbeddingIndex` (implements `RepoIndex`), vector store, chunked retrieval, project memory, recall benchmark |
+| **Dev C** | IDE integration (Phase 3) | `InlineCompletionItemProvider`, ghost-text, in-editor diffs, keyboard accept/reject, <300ms p50 latency budget |
+| **Dev D** | Enterprise / gateway (Phase 5) | Node/Express inference gateway, admin dashboard, org allowlists — standalone, no dependencies |
+| **Dev E** | Hardening (Phase 1) | Secret redaction, security test suite, audit logging — plus floating support |
+
+**Wave 2 (Phase 6)** and **Wave 3 (Phase 7)** are convergence work by the same
+team after Wave 1 lands — the "*later*" items on each track fold in there.
+
+### Working rules
+
+- Keep the test suite at 100% pass before every merge (`npm run test -w pixa-agent`).
+- New non-trivial logic ships with a test.
+- Agent file writes always route through the staged `ChangeSet` — never write disk directly.
+- Terminal commands and git commits stay human-approved.
 
 Design docs: [spec](docs/superpowers/specs/2026-07-03-pixa-ide-design.md) ·
 [implementation plan](docs/superpowers/plans/2026-07-03-pixa-ide-v1.md)
