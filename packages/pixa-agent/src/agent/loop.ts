@@ -6,6 +6,7 @@ import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
 import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 import { parsePlan } from "./planning";
+import { groupIntoBatches } from "./taskGraph";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
@@ -219,17 +220,28 @@ export class AgentLoop {
         });
         if (result.content) ctx.emit({ type: "assistant-done" });
 
-        for (const call of result.toolCalls) {
+        // Independent read-only calls run concurrently; anything that mutates
+        // state or has side effects runs alone, in order (see taskGraph.ts).
+        for (const batch of groupIntoBatches(result.toolCalls)) {
           if (signal.aborted) throw abortError();
-          ctx.emit({
-            type: "tool-start",
-            callId: call.id,
-            name: call.name,
-            summary: summarizeArgs(call.arguments),
+
+          for (const call of batch) {
+            ctx.emit({
+              type: "tool-start",
+              callId: call.id,
+              name: call.name,
+              summary: summarizeArgs(call.arguments),
+            });
+          }
+
+          // tools.run never rejects — it converts failures into result strings.
+          const outputs = await Promise.all(batch.map((c) => tools.run(c.name, c.arguments, ctx)));
+
+          // Results are recorded in call order so each pairs with its tool_call_id.
+          batch.forEach((call, i) => {
+            this.history.push({ role: "tool", content: outputs[i], toolCallId: call.id });
+            ctx.emit({ type: "tool-end", callId: call.id, result: truncateForUi(outputs[i]) });
           });
-          const output = await tools.run(call.name, call.arguments, ctx);
-          this.history.push({ role: "tool", content: output, toolCallId: call.id });
-          ctx.emit({ type: "tool-end", callId: call.id, result: truncateForUi(output) });
           ctx.emit({
             type: "changeset-updated",
             files: ctx.changeSet.list().map((f) => ({ path: f.path, status: f.status })),
