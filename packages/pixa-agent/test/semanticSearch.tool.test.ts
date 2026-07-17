@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ToolRegistry, registerBuiltinTools } from "../src/tools/registry";
-import type { QueryResult } from "../src/indexer/vectorStore";
-import type { ToolContext } from "../src/tools/types";
-import { ChangeSet } from "../src/edits/changeSet";
-import type { RepoIndex } from "../src/indexer/types";
+import { ToolRegistry, registerBuiltinTools } from "../src/tools/registry.js";
+import type { QueryResult } from "../src/indexer/vectorStore.js";
+import type { ToolContext } from "../src/tools/types.js";
+import { ChangeSet } from "../src/edits/changeSet.js";
+import type { RepoIndex } from "../src/indexer/types.js";
 
 function fakeEmbed(text: string): number[] {
   const dims = 32;
@@ -20,17 +20,18 @@ function fakeEmbed(text: string): number[] {
   return vec.map((v) => v / norm);
 }
 
-vi.mock("../src/providers/embeddings", () => ({
+// vi.mock() is hoisted to the top of the file automatically by vitest, so
+// the plain static VectorStore import below still resolves to this mock —
+// no dynamic `await import()` needed, which was the source of the top-level
+// await error under CommonJS.
+vi.mock("../src/providers/embeddings.js", () => ({
   embed: vi.fn(async (texts: string[]) => texts.map(fakeEmbed)),
 }));
 
-const { VectorStore } = await import("../src/indexer/vectorStore");
+import { VectorStore } from "../src/indexer/vectorStore.js";
 
 class TestSemanticIndex implements RepoIndex {
-  constructor(
-    private workspaceRoot: string,
-    private store: InstanceType<typeof VectorStore>
-  ) {}
+  constructor(private store: InstanceType<typeof VectorStore>) {}
 
   refresh(): void {}
 
@@ -66,7 +67,7 @@ describe("semantic_search tool", () => {
     ctx = {
       workspaceRoot,
       changeSet: new ChangeSet(),
-      index: new TestSemanticIndex(workspaceRoot, vectorStore),
+      index: new TestSemanticIndex(vectorStore),
       approvals: { requestApproval: async () => true },
       readWorkspaceFile: async (absPath) => fs.readFileSync(absPath, "utf8"),
       emit: () => {},
