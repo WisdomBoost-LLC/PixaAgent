@@ -14,7 +14,7 @@ import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
-import { GATEWAY_TOKEN_SECRET } from "../config";
+import { OPENROUTER_API_KEY_SECRET } from "../config";
 
 const SESSIONS_KEY = "pixa.sessions.v1";
 const MAX_SESSIONS = 30;
@@ -45,7 +45,8 @@ type WebviewMessage =
   | { type: "list-sessions" }
   | { type: "load-session"; id: string }
   | { type: "delete-session"; id: string }
-  | { type: "set-gateway-token" };
+  | { type: "set-api-key" }
+  | { type: "set-gateway-url" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
   private view: vscode.WebviewView | undefined;
@@ -271,14 +272,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private async onMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case "ready": {
-        const hasGatewayToken = !!(await this.context.secrets.get(GATEWAY_TOKEN_SECRET));
+        const hasApiKey = !!(await this.context.secrets.get(OPENROUTER_API_KEY_SECRET));
         this.post({
           type: "init",
           models: this.models
             .filter((m) => m.provider !== "local-embeddings")
             .map((m) => ({ id: m.id, label: m.label })),
           currentModelId: this.currentModelId,
-          hasGatewayToken,
+          hasApiKey,
+          gatewayUrl: this.currentGatewayUrl(),
         } as any);
         this.restoreSession();
         this.postChangeSet();
@@ -291,6 +293,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         try {
           const text = await this.resolveMentions(msg.text);
           await this.loop.run(text, this.currentModelId, this.abort.signal);
+        } catch (e) {
+          // Without this catch, any failure here (bad/missing API key, gateway
+          // unreachable, network error, etc.) was silently swallowed — the UI
+          // just flipped back to idle with nothing shown. Surface it instead.
+          const isAbort = e instanceof Error && e.name === "AbortError";
+          if (!isAbort) {
+            const message = e instanceof Error ? e.message : String(e);
+            this.post({ type: "error", message });
+          }
         } finally {
           this.running = false;
           this.post({ type: "run-finished" } as any);
@@ -334,14 +345,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "delete-session":
         this.deleteSession(msg.id);
         break;
-      case "set-gateway-token": {
-        await vscode.commands.executeCommand("pixa.setGatewayToken");
-        const hasGatewayToken = !!(await this.context.secrets.get(GATEWAY_TOKEN_SECRET));
-        this.post({ type: "gateway-token-status", hasGatewayToken } as any);
-        if (hasGatewayToken) this.post({ type: "status", text: "Gateway token updated." });
+      case "set-api-key": {
+        await vscode.commands.executeCommand("pixa.setApiKey");
+        const hasApiKey = !!(await this.context.secrets.get(OPENROUTER_API_KEY_SECRET));
+        this.post({ type: "api-key-status", hasApiKey } as any);
+        if (hasApiKey) this.post({ type: "status", text: "API key updated." });
+        break;
+      }
+      case "set-gateway-url": {
+        await vscode.commands.executeCommand("pixa.setGatewayUrl");
+        this.post({ type: "gateway-url-changed", gatewayUrl: this.currentGatewayUrl() } as any);
         break;
       }
     }
+  }
+
+  private currentGatewayUrl(): string {
+    return (
+      vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim() ||
+      "http://localhost:8080/v1/chat"
+    );
   }
 
   private async onChangeSetAction(
@@ -484,7 +507,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     </div>
     <div id="composer">
       <div id="api-key-warning" class="hidden">
-        No gateway token set. <a href="#" id="set-key-link">Set gateway token</a>
+        No API key set. <a href="#" id="set-key-link">Set OpenRouter API key</a>
+      </div>
+      <div id="gateway-info" class="dim">
+        Gateway: <span id="gateway-url-text"></span> · <a href="#" id="set-gateway-link">change</a>
       </div>
       <textarea id="input" rows="3" placeholder="Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)"></textarea>
       <div id="composer-actions">

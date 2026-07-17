@@ -1,7 +1,7 @@
 {
     "name": "pixa-gateway",
     "version": "0.1.0",
-    "description": "Enterprise inference gateway for the Pixa VS Code extension — proxies chat requests to OpenRouter, holding the provider key server-side.",
+    "description": "Stateless BYOK inference gateway for the Pixa VS Code extension — proxies chat to OpenRouter using each client's own API key.",
     "type": "module",
     "main": "dist/server.js",
     "scripts": {

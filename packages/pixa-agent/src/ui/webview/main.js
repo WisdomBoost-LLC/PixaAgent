@@ -100,11 +100,15 @@
           if (m.id === msg.currentModelId) opt.selected = true;
           modelSelect.appendChild(opt);
         }
-        $("api-key-warning").classList.toggle("hidden", msg.hasGatewayToken);
+        $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+        $("gateway-url-text").textContent = msg.gatewayUrl || "";
         break;
       }
-      case "gateway-token-status":
-        $("api-key-warning").classList.toggle("hidden", msg.hasGatewayToken);
+      case "api-key-status":
+        $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+        break;
+      case "gateway-url-changed":
+        $("gateway-url-text").textContent = msg.gatewayUrl || "";
         break;
       case "transcript": {
         clearMessages();
@@ -303,7 +307,11 @@
   );
   $("set-key-link").addEventListener("click", (e) => {
     e.preventDefault();
-    vscode.postMessage({ type: "set-gateway-token" });
+    vscode.postMessage({ type: "set-api-key" });
+  });
+  $("set-gateway-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    vscode.postMessage({ type: "set-gateway-url" });
   });
 
   vscode.postMessage({ type: "ready" });

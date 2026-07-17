@@ -35,8 +35,8 @@
     },
     "commands": [
       {
-        "command": "pixa.setGatewayToken",
-        "title": "Pixa: Set Gateway Token"
+        "command": "pixa.setApiKey",
+        "title": "Pixa: Set OpenRouter API Key"
       },
       {
         "command": "pixa.newSession",
