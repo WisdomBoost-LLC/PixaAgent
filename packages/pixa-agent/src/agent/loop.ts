@@ -5,6 +5,7 @@ import { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
 import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
+import { parsePlan } from "./planning";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
@@ -91,6 +92,7 @@ export class AgentLoop {
       const triedModels = new Set<string>([entry.id]);
       let fallbackHops = 0;
       let notifiedModelChange = false;
+      let planEmitted = false;
       this.history.push({ role: "user", content: userMessage });
 
       const base = await this.deps.workspaceInfo();
@@ -181,6 +183,15 @@ export class AgentLoop {
         if (entry.id !== modelId && !notifiedModelChange) {
           notifiedModelChange = true;
           ctx.emit({ type: "active-model-changed", modelId: entry.id });
+        }
+
+        // Planning pre-pass: the system prompt asks the model to state a plan
+        // before its first tool call, so the plan is already in this first
+        // response — parse and surface it without a separate model call.
+        if (!planEmitted) {
+          planEmitted = true;
+          const plan = parsePlan(result.content);
+          if (plan.steps.length > 0) ctx.emit({ type: "plan", steps: plan.steps });
         }
 
         if (result.usage) {
