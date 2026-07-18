@@ -145,16 +145,22 @@ export class OpenRouterProvider implements ModelProvider {
         : undefined,
     };
 
-    // Combine the caller's abort signal with a 30-second connect timeout so a
-    // slow or hung external host never blocks the UI indefinitely.
+    // Combine the caller's abort signal with a connect timeout so a slow or
+    // hung external host never blocks the UI indefinitely. 90s — large free-tier
+    // models are commonly queued and can take well over 30s to start responding.
+    const CONNECT_TIMEOUT_MS = 90_000;
     const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), 30_000);
+    const timeoutId = setTimeout(() => timeoutController.abort(), CONNECT_TIMEOUT_MS);
     const combinedSignal = AbortSignal.any
       ? AbortSignal.any([signal, timeoutController.signal])
       : (() => {
           const c = new AbortController();
           signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
-          timeoutController.signal.addEventListener("abort", () => c.abort(new Error("Request timed out after 30s — the provider is not responding")), { once: true });
+          timeoutController.signal.addEventListener(
+            "abort",
+            () => c.abort(new Error(`Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s — the provider is not responding`)),
+            { once: true }
+          );
           return c.signal;
         })();
 
@@ -172,7 +178,17 @@ export class OpenRouterProvider implements ModelProvider {
         body: JSON.stringify(body),
       });
     } catch (err: unknown) {
+      // User hit Stop (or switched session) — propagate as AbortError so the
+      // loop shows "Stopped." rather than a fake network failure.
       if (signal.aborted) throw err;
+      // Connect timeout — OpenRouter/gateway never returned headers in time.
+      // Must NOT look like an AbortError: isAbort used to match any message
+      // containing "aborted", which made timeouts display as "Stopped."
+      if (timeoutController.signal.aborted) {
+        throw new Error(
+          `Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s waiting for the first byte from the gateway. Free-tier models are often queued — try a smaller/paid model, or wait and retry.`
+        );
+      }
       const detail = err instanceof Error ? err.message : String(err);
       throw new Error(
         `Could not reach gateway at ${url} (${detail}). Start it with: npm start -w pixa-gateway`

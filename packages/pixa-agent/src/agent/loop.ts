@@ -281,5 +281,9 @@ function abortError(): Error {
 }
 
 function isAbort(e: unknown): boolean {
-  return e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"));
+  // Only treat real AbortError as a user stop. Matching message text that
+  // merely contains "aborted" was wrong — fetch/timeout wrappers often say
+  // "This operation was aborted", which made connect timeouts show as
+  // "Stopped." instead of the actual timeout/network error.
+  return e instanceof Error && e.name === "AbortError";
 }
