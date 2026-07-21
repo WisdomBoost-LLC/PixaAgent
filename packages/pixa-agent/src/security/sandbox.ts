@@ -62,32 +62,42 @@ const DENY_PATTERNS: { name: string; regex: RegExp }[] = [
     { name: "env-exfiltration", regex: /\benv\b\s*\|\s*(curl|wget|nc)\b/i },
 ];
 
+import { securityLogger } from "./audit";
+
 export function evaluateCommand(command: string): PolicyResult {
     const trimmed = command.trim();
 
     if (!trimmed) {
-        return { verdict: "deny", reason: "Empty command." };
+        const result: PolicyResult = { verdict: "deny", reason: "Empty command." };
+        securityLogger.log("evaluateCommand", result.verdict, { command: trimmed, reason: result.reason });
+        return result;
     }
 
     for (const { name, regex } of DENY_PATTERNS) {
         if (regex.test(trimmed)) {
-            return {
+            const result: PolicyResult = {
                 verdict: "deny",
                 reason: `Blocked: matches a known-destructive pattern ("${name}").`,
                 matchedRule: name,
             };
+            securityLogger.log("evaluateCommand", result.verdict, { command: trimmed, reason: result.reason, rule: name });
+            return result;
         }
     }
 
     for (const { name, regex } of SAFE_PREFIXES) {
         if (regex.test(trimmed)) {
-            return {
+            const result: PolicyResult = {
                 verdict: "allow",
                 reason: "Read-only/informational command — auto-allowed.",
                 matchedRule: name,
             };
+            securityLogger.log("evaluateCommand", result.verdict, { command: trimmed, reason: result.reason, rule: name });
+            return result;
         }
     }
 
-    return { verdict: "confirm", reason: "Not on the safe list — requires user approval." };
+    const result: PolicyResult = { verdict: "confirm", reason: "Not on the safe list — requires user approval." };
+    securityLogger.log("evaluateCommand", result.verdict, { command: trimmed, reason: result.reason });
+    return result;
 }

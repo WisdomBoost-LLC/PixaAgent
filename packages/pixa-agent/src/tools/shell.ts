@@ -4,6 +4,7 @@ import type { Tool } from "./types";
 import { resolveInWorkspace } from "./paths";
 import { evaluateCommand } from "../security/sandbox";
 import { redactSecrets } from "../security/redact";
+import { securityLogger } from "../security/audit";
 
 const MAX_OUTPUT_CHARS = 8000;
 const TIMEOUT_MS = 30_000;
@@ -88,8 +89,10 @@ const runCommand: Tool = {
             );
 
             if (!approved) {
+                securityLogger.log("userApproval", "deny", { command: args.command, reason: "User denied command approval prompt" });
                 return "Command not approved by user.";
             }
+            securityLogger.log("userApproval", "allow", { command: args.command });
         }
 
         let cwdAbs: string;
