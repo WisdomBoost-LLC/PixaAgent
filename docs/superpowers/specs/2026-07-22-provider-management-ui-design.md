@@ -66,7 +66,7 @@ name, base URL, model count, delete button. When empty:
 > No providers configured. Pixa's built-in models require an OpenRouter key —
 > add a provider below to use your own endpoint or a local model.
 
-**Quick setup.** Four preset cards that prefill the form:
+**Quick setup.** Five preset cards. Four prefill the custom-provider form:
 
 | Preset | Base URL | Requires key |
 |---|---|---|
@@ -76,7 +76,23 @@ name, base URL, model count, delete button. When empty:
 | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | yes |
 
 Presets are a starting point, not a lock — every field stays editable after
-selection. A fifth "Custom" option clears the form.
+selection. A sixth "Custom" option clears the form.
+
+**OpenRouter is the fifth preset, and it behaves differently on purpose.**
+OpenRouter is not a `pixa.providers` entry — it is wired in `extension.ts` as
+a separate, built-in `ModelProvider` with id `"openrouter"`, backed by the
+bundled `models.json` (nine curated models) and the existing
+`pixa.setApiKey` command / `pixa.openrouter.apiKey` secret.
+
+`ProviderRegistry.register()` is `this.providers.set(provider.id, provider)`
+— a second registration with id `"openrouter"` would silently replace the
+built-in one, and the custom-provider form has no way to offer the curated
+model list, only manual entry. So clicking the OpenRouter card does not fill
+the form: it runs the existing `pixa.setApiKey` command directly. A user who
+only needs OpenRouter never touches the custom-provider path at all — this
+preset exists purely so OpenRouter is visible and one click away from the
+same screen where every other provider gets configured, not because it goes
+through the same mechanism.
 
 **Add provider form.** Fields: id, display name, base URL, requires-API-key
 toggle, API key (shown only when the toggle is on), and models.
@@ -173,7 +189,9 @@ No VS Code or network imports, so it is unit-testable in isolation. Exports:
   array, returns `string[]`, skips entries without an id, never throws.
 - `formToProviderConfig(form)` — maps validated form state to a
   `ProviderConfig` entry, reusing `chatCompletionsUrl` for URL normalization.
-- `PRESETS` — the four preset definitions above as data.
+- `PRESETS` — the four form-filling preset definitions above as data. The
+  OpenRouter card is not in this list — it is rendered separately in the
+  webview and dispatches `pixa.setApiKey` instead of populating the form.
 
 ### `src/ui/chatViewProvider.ts` (extended)
 
@@ -245,3 +263,8 @@ webview test harness.
 **Manual model entry only** — rejected. Discovery removes the observed silent
 failure where a typed model id does not match the server's, which is the most
 likely way a correctly-configured-looking provider still fails.
+
+**Registering OpenRouter as a normal `pixa.providers` preset** — rejected.
+Would silently overwrite the built-in provider (same id, last `register()`
+wins) and lose the curated bundled model list in favor of manual entry. The
+OpenRouter card instead opens the existing `pixa.setApiKey` flow.
