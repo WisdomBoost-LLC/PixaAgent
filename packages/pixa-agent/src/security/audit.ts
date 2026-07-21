@@ -1,5 +1,5 @@
 import { redactSecrets } from "./redact";
-
+import * as vscode from "vscode";
 export interface AuditLogEntry {
     timestamp: string;
     action: string;
@@ -45,9 +45,8 @@ export class SecurityLogger {
             ...(Object.keys(sanitizedDetails).length > 0 ? { details: sanitizedDetails } : {}),
         };
 
-        const formatted = `[${entry.timestamp}] [${entry.outcome.toUpperCase()}] ${entry.action}${
-            entry.details ? ` - ${JSON.stringify(entry.details)}` : ""
-        }`;
+        const formatted = `[${entry.timestamp}] [${entry.outcome.toUpperCase()}] ${entry.action}${entry.details ? ` - ${JSON.stringify(entry.details)}` : ""
+            }`;
 
         if (this.channel) {
             this.channel.appendLine(formatted);
