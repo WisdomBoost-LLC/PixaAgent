@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- Replace with docs/banner.png once the banner is ready (1280x640) -->
-<img src="docs/banner.png" alt="Pixa Agent" width="100%">
+<img src="https://raw.githubusercontent.com/WisdomBoost/PixaAgent/main/docs/banner.png" alt="Pixa Agent" width="100%">
 
 # Pixa Agent
 
