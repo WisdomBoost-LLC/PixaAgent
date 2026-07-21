@@ -21,13 +21,9 @@ import { McpManager } from "./mcp/manager";
 import type { McpServerConfig } from "./mcp/client";
 import { providersToModels, chatCompletionsUrl, type ProvidersConfig } from "./providers/config";
 import type { ModelEntry } from "./providers/types";
+import { providerSecretKey } from "./providers/secretKeys";
 
 const API_KEY_SECRET = "pixa.openrouter.apiKey";
-
-/** Secret-storage key holding the API key for a user-configured provider. */
-function providerSecretKey(providerId: string): string {
-  return `pixa.provider.${providerId}.apiKey`;
-}
 
 /**
  * Register a client for every provider the user declared in `pixa.providers`,
