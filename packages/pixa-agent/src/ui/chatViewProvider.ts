@@ -258,7 +258,6 @@ export class ChatViewProvider
   }
 
   private trackUsage(event: Extract<AgentEvent, { type: "usage" }>): void {
-    console.log(event);
     const key = `${event.providerId}:${event.modelId}`;
     const store = this.loadAnalytics();
     const current = store.byModel[key] ?? {
@@ -296,7 +295,6 @@ export class ChatViewProvider
     const byModel = Object.values(store.byModel).sort(
       (a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0),
     );
-    console.log("bymodel", byModel);
     const totalCostUsd = byModel.reduce((sum, r) => sum + r.totalCostUsd, 0);
     const totalRequests = byModel.reduce((sum, r) => sum + r.totalRequests, 0);
     const totalTokens = byModel.reduce(
