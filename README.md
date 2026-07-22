@@ -185,8 +185,11 @@ and we'd rather you know exactly where the edges are.
 **Solid**
 - Agent loop, planning, multi-file editing with diff approval
 - Provider system — hosted and self-hosted, configurable from the UI
+- Command-safety policy — known-destructive commands are blocked before you're
+  even asked; everything else still requires your approval
+- Secret redaction and an audit log
 - Cost tracking, chat history, MCP, project memory
-- 131 tests passing offline
+- 181 tests passing offline
 
 **Early / rough**
 - **Semantic search is optional and off by default.** It needs
@@ -199,7 +202,8 @@ and we'd rather you know exactly where the edges are.
 
 **Not built yet**
 - Inline completion (ghost text) — designed, not implemented
-- Command sandboxing — **see Security below**
+- Full process-level command isolation — a destructive-command *policy* ships
+  today (see Security), but approved commands still run in your own shell
 
 We'd rather ship an honest README than a flattering one. If something here is
 wrong or out of date, that's a bug — please [open an issue](https://github.com/WisdomBoost-LLC/PixaAgent/issues).
