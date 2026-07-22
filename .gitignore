@@ -11,3 +11,4 @@ ide/vscode/
 
 # Local progress tracker — not for git
 PROGRESS.md
+packages/pixa-agent/README.md

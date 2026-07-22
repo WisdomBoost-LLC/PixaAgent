@@ -2,7 +2,7 @@
   "name": "pixa-agent",
   "displayName": "Pixa Agent",
   "description": "AI coding agent for VS Code — bring your own model.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "PIXAFLIP",
   "icon": "media/icon.png",
   "author": "Pixaflip Technologies",
@@ -165,7 +165,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:offline": "vitest run --exclude \"**/Vector.test.ts\" --exclude \"**/embeddings.test.ts\" --exclude \"**/*.manual.*\"",
-    "package": "vsce package --no-dependencies"
+    "sync-readme": "node -e \"require('fs').copyFileSync('../../README.md','README.md')\"",
+    "package": "npm run sync-readme && vsce package --no-dependencies",
+    "publish": "npm run sync-readme && vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
