@@ -211,13 +211,17 @@ wrong or out of date, that's a bug — please [open an issue](https://github.com
 **What protects you today:**
 - The agent **cannot write to disk** without you clicking Apply.
 - Terminal commands and git commits **always** require explicit approval.
+- **Known-destructive commands are hard-blocked** — patterns like `rm -rf /`,
+  `curl … | sh`, disk-overwrite, and force-push to `main` are refused before
+  you're even asked, so they can't slip through an over-eager Approve.
 - File access is restricted to the open workspace folder.
 - API keys live in VS Code secret storage, never in config files.
 
-> ⚠️ **Approved commands are not sandboxed yet.** When you approve a command,
-> it runs with your normal user permissions. Command-policy sandboxing is
-> written but not yet wired into the execution path — until it ships, **read
-> every command before approving it**, and prefer trusted workspaces.
+> ⚠️ **Approved commands still run with your normal user permissions.** The
+> command policy is a guardrail against careless destruction, not a hard
+> boundary against a deliberately adversarial model — it's pattern-based and
+> won't catch obfuscated commands. Read commands before approving them, and
+> prefer trusted workspaces.
 
 Found a security issue? Please report it privately — see [SECURITY.md](SECURITY.md).
 
