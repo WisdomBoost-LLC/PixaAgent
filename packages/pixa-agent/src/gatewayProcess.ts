@@ -41,14 +41,14 @@ export function resolveGatewayExecutable(context: vscode.ExtensionContext): {
   const prodJsPath = path.join(context.extensionPath, "dist", "gateway", "server.js");
   const devTsPath = path.join(context.extensionPath, "..", "gateway", "src", "server.ts");
 
-  if (fs.existsSync(prodBinPath)) {
+  if (fs.existsSync(devTsPath)) {
+    return { command: "npx", args: ["tsx", devTsPath], cwd: path.dirname(path.dirname(devTsPath)) };
+  } else if (fs.existsSync(prodBinPath)) {
     return { command: prodBinPath, args: [], cwd: path.dirname(prodBinPath) };
   } else if (fs.existsSync(binFolderBinPath)) {
     return { command: binFolderBinPath, args: [], cwd: path.dirname(binFolderBinPath) };
   } else if (fs.existsSync(prodJsPath)) {
     return { command: "node", args: [prodJsPath], cwd: path.dirname(prodJsPath) };
-  } else if (fs.existsSync(devTsPath)) {
-    return { command: "npx", args: ["tsx", devTsPath], cwd: path.dirname(path.dirname(devTsPath)) };
   }
 
   return null;
