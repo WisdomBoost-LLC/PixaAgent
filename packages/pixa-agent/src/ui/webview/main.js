@@ -246,13 +246,22 @@
       row.className = "cs-row cs-" + f.status;
       const actions =
         f.status === "pending"
-          ? '<button data-a="open-diff">Diff</button><button data-a="apply">Apply</button><button data-a="reject">Reject</button>'
+          ? '<button data-a="open-diff">Review</button><button data-a="apply">Apply</button><button data-a="reject">Reject</button>'
           : f.status === "applied"
             ? '<em>applied</em> <button data-a="revert">Revert</button>'
             : "<em>" + f.status + "</em>";
+      // The filename is clickable for pending files — the natural "show me the
+      // change" gesture opens the diff, so reviewing before Apply is obvious.
+      const pathClickable = f.status === "pending";
       row.innerHTML =
-        '<span class="cs-dot"></span><span class="cs-path" title="' + escapeHtml(f.path) + '">' +
+        '<span class="cs-dot"></span><span class="cs-path' + (pathClickable ? " cs-path-clickable" : "") +
+        '" title="' + escapeHtml(pathClickable ? "Click to review this change" : f.path) + '">' +
         escapeHtml(f.path) + '</span><span class="cs-actions">' + actions + "</span>";
+      if (pathClickable) {
+        row.querySelector(".cs-path").addEventListener("click", () =>
+          vscode.postMessage({ type: "changeset-action", path: f.path, action: "open-diff" })
+        );
+      }
       row.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () =>
           vscode.postMessage({ type: "changeset-action", path: f.path, action: btn.dataset.a })
