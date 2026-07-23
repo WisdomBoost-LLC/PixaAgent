@@ -19,15 +19,10 @@ import { DiffPreview } from "./ui/diffPreview";
 import { ChatViewProvider } from "./ui/chatViewProvider";
 import { McpManager } from "./mcp/manager";
 import type { McpServerConfig } from "./mcp/client";
-<<<<<<< HEAD
 import { DEFAULT_GATEWAY_URL, OPENROUTER_API_KEY_SECRET } from "./config";
-=======
 import { providersToModels, chatCompletionsUrl, type ProvidersConfig } from "./providers/config";
 import type { ModelEntry } from "./providers/types";
 import { providerSecretKey } from "./providers/secretKeys";
-
-const API_KEY_SECRET = "pixa.openrouter.apiKey";
->>>>>>> main
 
 /**
  * Register a client for every provider the user declared in `pixa.providers`,
@@ -168,19 +163,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const modelsPath = path.join(context.extensionPath, "dist", "models.json");
   const bundledModels = loadModels(fs.readFileSync(modelsPath, "utf8"));
   const providers = new ProviderRegistry();
-<<<<<<< HEAD
-  const openRouter = new OpenRouterProvider(resolveGatewayUrl(), () =>
-    context.secrets.get(OPENROUTER_API_KEY_SECRET) as Promise<string | undefined>
+  const openRouter = new OpenRouterProvider(
+    () => Promise.resolve(context.secrets.get(OPENROUTER_API_KEY_SECRET)),
+    { gatewayUrl: resolveGatewayUrl() }
   );
   providers.register(openRouter);
-=======
-  providers.register(new OpenRouterProvider(() => Promise.resolve(context.secrets.get(API_KEY_SECRET))));
 
   // User-declared providers (OpenCode-style) extend the bundled defaults —
   // any OpenAI-compatible endpoint, including self-hosted models.
   const userModels = registerUserProviders(context, providers, log);
   const models = [...bundledModels, ...userModels];
->>>>>>> main
   providers.register(new LocalEmbeddingsProvider());
 
   context.subscriptions.push(

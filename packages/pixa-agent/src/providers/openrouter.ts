@@ -10,6 +10,7 @@ import type {
 import { RateLimitError, classifyRateLimit } from "./errors";
 import { DEFAULT_GATEWAY_URL } from "../config";
 
+const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 /* ---------- pure helpers (unit-tested) ---------- */
 
@@ -114,20 +115,37 @@ export class OpenRouterProvider implements ModelProvider {
   private endpoint: string;
   private requiresApiKey: boolean;
   private displayName: string;
+  private gatewayUrl?: string;
 
   /**
-   * @param gatewayUrl Full URL of the gateway's chat endpoint (e.g. http://localhost:8080/v1/chat).
-   *   The gateway is a stateless BYOK proxy — it forwards this user's OpenRouter key upstream.
    * @param getApiKey Resolves the user's OpenRouter API key from secret storage.
+   * @param opts Extra options for custom providers or gateway URL.
    */
   constructor(
-    private gatewayUrl: string,
-    private getApiKey: () => Promise<string | undefined>
-  ) { }
+    private getApiKey: () => Promise<string | undefined>,
+    opts: {
+      id?: string;
+      endpoint?: string;
+      requiresApiKey?: boolean;
+      displayName?: string;
+      gatewayUrl?: string;
+    } = {}
+  ) {
+    this.id = opts.id ?? "openrouter";
+    this.endpoint = opts.endpoint ?? API_URL;
+    this.requiresApiKey = opts.requiresApiKey !== false;
+    this.displayName = opts.displayName ?? this.id;
+    this.gatewayUrl = opts.gatewayUrl;
+  }
 
   /** Lets the extension point at a new gateway without recreating the provider (e.g. after changing `pixa.gatewayUrl`). */
   setGatewayUrl(url: string): void {
     this.gatewayUrl = url;
+  }
+
+  /** True when this client talks to OpenRouter itself (enables its extensions). */
+  private get isOpenRouter(): boolean {
+    return this.id === "openrouter";
   }
 
   async chat(
@@ -135,10 +153,16 @@ export class OpenRouterProvider implements ModelProvider {
     onDelta: (d: StreamDelta) => void,
     signal: AbortSignal
   ): Promise<ChatResult> {
-    const url = this.gatewayUrl || DEFAULT_GATEWAY_URL;
+    const url = this.gatewayUrl || (this.id === "openrouter" ? DEFAULT_GATEWAY_URL : this.endpoint);
     const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      throw new Error('No OpenRouter API key set. Run "Pixa: Set OpenRouter API Key".');
+    if (!apiKey && this.requiresApiKey) {
+      if (this.id === "openrouter") {
+        throw new Error('No OpenRouter API key set. Run "Pixa: Set OpenRouter API Key".');
+      } else {
+        throw new Error(
+          `No API key set for "${this.displayName}". Run "Pixa: Set Provider API Key" and choose ${this.id}.`
+        );
+      }
     }
 
     const body: Record<string, unknown> = {

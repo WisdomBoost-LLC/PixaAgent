@@ -14,13 +14,10 @@ import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
-<<<<<<< HEAD
 import { OPENROUTER_API_KEY_SECRET } from "../config";
-=======
 import type { ProvidersConfig } from "../providers/config";
 import { validateProviderForm, parseModelsResponse, modelsEndpointUrl } from "../providers/providerForm";
 import { providerSecretKey } from "../providers/secretKeys";
->>>>>>> main
 
 const SESSIONS_KEY = "pixa.sessions.v1";
 const MAX_SESSIONS = 30;
@@ -52,9 +49,7 @@ type WebviewMessage =
   | { type: "load-session"; id: string }
   | { type: "delete-session"; id: string }
   | { type: "set-api-key" }
-<<<<<<< HEAD
-  | { type: "set-gateway-url" };
-=======
+  | { type: "set-gateway-url" }
   | { type: "list-providers" }
   | { type: "fetch-models"; baseUrl: string; apiKey?: string }
   | {
@@ -68,7 +63,6 @@ type WebviewMessage =
     }
   | { type: "delete-provider"; id: string }
   | { type: "reload-window" };
->>>>>>> main
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
   private view: vscode.WebviewView | undefined;
@@ -377,21 +371,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
       }
-<<<<<<< HEAD
       case "set-gateway-url": {
         await vscode.commands.executeCommand("pixa.setGatewayUrl");
         this.post({ type: "gateway-url-changed", gatewayUrl: this.currentGatewayUrl() } as any);
         break;
       }
-    }
-  }
-
-  private currentGatewayUrl(): string {
-    return (
-      vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim() ||
-      "http://localhost:8080/v1/chat"
-    );
-=======
       case "list-providers":
         this.postProviders();
         break;
@@ -414,6 +398,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         await vscode.commands.executeCommand("workbench.action.reloadWindow");
         break;
     }
+  }
+
+  private currentGatewayUrl(): string {
+    return (
+      vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim() ||
+      "http://localhost:8080/v1/chat"
+    );
   }
 
   /* ---------- provider management ---------- */
@@ -500,7 +491,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     await this.context.secrets.delete(providerSecretKey(id));
     this.post({ type: "provider-deleted", id });
     this.postProviders();
->>>>>>> main
   }
 
   private async onChangeSetAction(
