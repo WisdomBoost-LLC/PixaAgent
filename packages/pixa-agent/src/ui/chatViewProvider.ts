@@ -641,7 +641,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     </div>
     <div id="changeset" class="hidden">
       <div id="changeset-header">
-        <span>Proposed changes</span>
+        <span>Proposed changes <span class="changeset-hint">— click a file to review</span></span>
         <button id="apply-all">Apply all</button>
       </div>
       <div id="changeset-files"></div>
