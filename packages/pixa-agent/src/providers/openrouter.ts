@@ -224,13 +224,11 @@ export class OpenRouterProvider implements ModelProvider {
       // containing "aborted", which made timeouts display as "Stopped."
       if (timeoutController.signal.aborted) {
         throw new Error(
-          `Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s waiting for the first byte from the gateway. Free-tier models are often queued — try a smaller/paid model, or wait and retry.`
+          `Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s waiting for a response. Free-tier models are often queued — try a smaller/paid model, or wait and retry.`
         );
       }
       const detail = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Could not reach gateway at ${url} (${detail}). Start it with: npm start -w pixa-gateway`
-      );
+      throw new Error(`Could not reach the AI service (${detail}). Please try again in a moment.`);
     } finally {
       // Once we have the response (or an error), the connect phase is done;
       // cancel the connect timeout so it doesn't fire during the streaming phase.

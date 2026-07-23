@@ -49,18 +49,17 @@ type WebviewMessage =
   | { type: "load-session"; id: string }
   | { type: "delete-session"; id: string }
   | { type: "set-api-key" }
-  | { type: "set-gateway-url" }
   | { type: "list-providers" }
   | { type: "fetch-models"; baseUrl: string; apiKey?: string }
   | {
-      type: "save-provider";
-      id: string;
-      name: string;
-      baseUrl: string;
-      requiresApiKey: boolean;
-      apiKey?: string;
-      models: { id: string; name?: string }[];
-    }
+    type: "save-provider";
+    id: string;
+    name: string;
+    baseUrl: string;
+    requiresApiKey: boolean;
+    apiKey?: string;
+    models: { id: string; name?: string }[];
+  }
   | { type: "delete-provider"; id: string }
   | { type: "reload-window" };
 
@@ -299,7 +298,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
             .map((m) => ({ id: m.id, label: m.label })),
           currentModelId: this.currentModelId,
           hasApiKey,
-          gatewayUrl: this.currentGatewayUrl(),
         } as any);
         this.restoreSession();
         this.postChangeSet();
@@ -371,11 +369,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
       }
-      case "set-gateway-url": {
-        await vscode.commands.executeCommand("pixa.setGatewayUrl");
-        this.post({ type: "gateway-url-changed", gatewayUrl: this.currentGatewayUrl() } as any);
-        break;
-      }
       case "list-providers":
         this.postProviders();
         break;
@@ -398,13 +391,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         await vscode.commands.executeCommand("workbench.action.reloadWindow");
         break;
     }
-  }
-
-  private currentGatewayUrl(): string {
-    return (
-      vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim() ||
-      "http://localhost:8080/v1/chat"
-    );
   }
 
   /* ---------- provider management ---------- */
@@ -673,9 +659,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     <div id="composer">
       <div id="api-key-warning" class="hidden">
         No API key set. <a href="#" id="set-key-link">Set OpenRouter API key</a>
-      </div>
-      <div id="gateway-info" class="dim">
-        Gateway: <span id="gateway-url-text"></span> · <a href="#" id="set-gateway-link">change</a>
       </div>
       <textarea id="input" rows="3" placeholder="Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)"></textarea>
       <div id="composer-actions">

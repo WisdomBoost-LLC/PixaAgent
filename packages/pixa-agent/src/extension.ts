@@ -69,8 +69,10 @@ async function hidePixaFolderFromExplorer(workspaceRoot: string): Promise<void> 
 }
 
 function resolveGatewayUrl(): string {
-  const configured = vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim();
-  return configured || DEFAULT_GATEWAY_URL;
+  // Single-user setup: the backend endpoint is an internal implementation
+  // detail (usage accounting / rate limiting), not something to expose or
+  // let the user reconfigure. Always use the built-in default.
+  return DEFAULT_GATEWAY_URL;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -127,24 +129,6 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("pixa.setGatewayUrl", async () => {
-      const current = resolveGatewayUrl();
-      const url = await vscode.window.showInputBox({
-        prompt: "Enter the Pixa gateway chat endpoint URL",
-        value: current,
-        ignoreFocusOut: true,
-        validateInput: (v) => (/^https?:\/\/\S+/.test(v.trim()) ? null : "Must be a valid http(s) URL"),
-      });
-      if (url) {
-        await vscode.workspace
-          .getConfiguration("pixa")
-          .update("gatewayUrl", url.trim(), vscode.ConfigurationTarget.Global);
-        void vscode.window.showInformationMessage(`Pixa: gateway URL set to ${url.trim()}`);
-      }
-    })
-  );
-
   if (!workspaceRoot) {
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider("pixa.chat", {
@@ -174,14 +158,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const userModels = registerUserProviders(context, providers, log);
   const models = [...bundledModels, ...userModels];
   providers.register(new LocalEmbeddingsProvider());
-
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("pixa.gatewayUrl")) {
-        openRouter.setGatewayUrl(resolveGatewayUrl());
-      }
-    })
-  );
 
   fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
   initEmbeddingCache(context.globalStorageUri.fsPath);
@@ -332,4 +308,4 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void { }
