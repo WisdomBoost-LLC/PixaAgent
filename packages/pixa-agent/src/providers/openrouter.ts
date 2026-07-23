@@ -101,8 +101,19 @@ function toWire(messages: ChatMessage[]): WireMessage[] {
 
 /* ---------- provider ---------- */
 
+/**
+ * OpenAI-compatible chat client.
+ *
+ * Serves OpenRouter by default, but works with ANY OpenAI-compatible endpoint —
+ * NVIDIA NIM, a company gateway, or a self-hosted server (Ollama, vLLM,
+ * LM Studio, llama.cpp) — by passing a different id/endpoint. Local servers
+ * that need no credentials pass `requiresApiKey: false`.
+ */
 export class OpenRouterProvider implements ModelProvider {
-  readonly id = "openrouter";
+  readonly id: string;
+  private endpoint: string;
+  private requiresApiKey: boolean;
+  private displayName: string;
 
   /**
    * @param gatewayUrl Full URL of the gateway's chat endpoint (e.g. http://localhost:8080/v1/chat).
@@ -112,7 +123,7 @@ export class OpenRouterProvider implements ModelProvider {
   constructor(
     private gatewayUrl: string,
     private getApiKey: () => Promise<string | undefined>
-  ) {}
+  ) { }
 
   /** Lets the extension point at a new gateway without recreating the provider (e.g. after changing `pixa.gatewayUrl`). */
   setGatewayUrl(url: string): void {
@@ -130,20 +141,22 @@ export class OpenRouterProvider implements ModelProvider {
       throw new Error('No OpenRouter API key set. Run "Pixa: Set OpenRouter API Key".');
     }
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: req.model,
       messages: toWire(req.messages),
       stream: true,
       temperature: req.temperature ?? 0.2,
       max_tokens: req.maxTokens ?? 8192,
-      usage: { include: true },
       tools: req.tools.length
         ? req.tools.map((t) => ({
-            type: "function",
-            function: { name: t.name, description: t.description, parameters: t.parameters },
-          }))
+          type: "function",
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        }))
         : undefined,
     };
+    // Cost accounting is an OpenRouter extension; other OpenAI-compatible
+    // servers may reject unknown fields, so only send it to OpenRouter.
+    if (this.isOpenRouter) body.usage = { include: true };
 
     // Combine the caller's abort signal with a connect timeout so a slow or
     // hung external host never blocks the UI indefinitely. 90s — large free-tier
@@ -154,15 +167,15 @@ export class OpenRouterProvider implements ModelProvider {
     const combinedSignal = AbortSignal.any
       ? AbortSignal.any([signal, timeoutController.signal])
       : (() => {
-          const c = new AbortController();
-          signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
-          timeoutController.signal.addEventListener(
-            "abort",
-            () => c.abort(new Error(`Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s — the provider is not responding`)),
-            { once: true }
-          );
-          return c.signal;
-        })();
+        const c = new AbortController();
+        signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
+        timeoutController.signal.addEventListener(
+          "abort",
+          () => c.abort(new Error(`Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s — the provider is not responding`)),
+          { once: true }
+        );
+        return c.signal;
+      })();
 
     let res: Response;
     try {
@@ -170,10 +183,11 @@ export class OpenRouterProvider implements ModelProvider {
         method: "POST",
         signal: combinedSignal,
         headers: {
-          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://pixa.dev",
-          "X-Title": "Pixa IDE",
+          // Keyless local servers (Ollama, LM Studio) get no auth header.
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          // OpenRouter-only attribution headers.
+          ...(this.isOpenRouter ? { "HTTP-Referer": "https://pixa.dev", "X-Title": "Pixa IDE" } : {}),
         },
         body: JSON.stringify(body),
       });
@@ -221,7 +235,7 @@ export class OpenRouterProvider implements ModelProvider {
     let usage: UsageInfo | null = null;
     const toolAcc: ToolCallAccumulator = {};
 
-    for (;;) {
+    for (; ;) {
       // Respect abort between chunks so Stop takes effect immediately even
       // if the server keeps the connection open.
       if (signal.aborted) {

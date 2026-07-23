@@ -22,7 +22,15 @@ const ctx = await esbuild.context({
   entryPoints: ["src/extension.ts"],
   bundle: true,
   outfile: "dist/extension.js",
-  external: ["vscode", "vectra", "@huggingface/transformers"],
+  // vectra is pure JS and lazy-requires @huggingface/transformers only when
+  // embeddings are actually used, so it's safe to bundle. transformers itself
+  // (and its native onnxruntime binary) stays external and unbundled — vsce
+  // package --no-dependencies ships no node_modules, so any eager top-level
+  // require of it would crash activation. It's only ever dynamically
+  // imported behind try/catch (see providers/embeddings.ts), so when it's
+  // missing, semantic search just fails to enable instead of taking down the
+  // whole extension.
+  external: ["vscode", "@huggingface/transformers"],
   format: "cjs",
   platform: "node",
   target: "node20",

@@ -1,181 +1,265 @@
-# Pixa
+<div align="center">
 
-An AI-first IDE. A Cursor-class coding agent — plan, read, search, multi-file
-edit with diff review, approval-gated terminal and git — shipped as a VS Code
-extension today and as the branded **Pixa IDE** (VS Code OSS distribution)
-via the `ide/` pipeline.
+<img src="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/banner.png" alt="Pixa Agent" width="100%">
 
-```
-┌─ Pixa IDE (VS Code OSS + branding, ide/) ─────────────────┐
-│  ┌─ pixa-agent extension (packages/pixa-agent) ─────────┐ │
-│  │  Chat webview ⇄ Extension host                       │ │
-│  │    AgentLoop ── ContextManager (token budgeting)     │ │
-│  │      │                                               │ │
-│  │      ├─ ProviderRegistry ── models.json (data-driven)│ │
-│  │      │    └─ OpenRouterProvider (streaming + tools)  │ │
-│  │      ├─ ToolRegistry (plugin point)                  │ │
-│  │      │    fs · search(ripgrep) · terminal · git      │ │
-│  │      ├─ WorkspaceIndexer (RepoIndex interface)       │ │
-│  │      └─ ChangeSet → native diff → Apply/Reject       │ │
-│  └──────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────┘
-                     │ HTTPS (key in SecretStorage)
-               OpenRouter → GLM / Qwen / DeepSeek / Claude / GPT / Gemini
-```
+# Pixa Agent
 
-> **This is the OpenRouter-only build (v0.3.8).** It uses a single provider —
-> OpenRouter — for all models. No NVIDIA/other backends. This is the stable
-> baseline for the team to work from.
+**Your AI coding agent. Your models. Your machine.**
 
-## Getting started (team onboarding)
+An open-source AI coding agent for VS Code that plans, reads your codebase, and
+edits multiple files — with every change staged as a diff you approve.
+Point it at OpenRouter, your company gateway, or a model running on your own
+laptop. No vendor lock-in. No telemetry. No required server.
 
-### Prerequisites
-- **Node.js 20+** ([nodejs.org](https://nodejs.org)) — check with `node -v`
-- **VS Code** ([code.visualstudio.com](https://code.visualstudio.com))
-- **Git**
-- An **OpenRouter account + API key** — free to create at
-  [openrouter.ai/keys](https://openrouter.ai/keys). Each person uses their own
-  key; usage and billing stay per-person. Free models exist; paid models
-  (e.g. GLM 5.2) need a few dollars of credit.
+[![CI](https://github.com/WisdomBoost-LLC/PixaAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/WisdomBoost-LLC/PixaAgent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-blue.svg)](https://code.visualstudio.com/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-### 1. Clone and build
+</div>
+
+---
+
+## Why Pixa?
+
+Most AI coding assistants decide which model you use and where your code goes.
+Pixa doesn't.
+
+| | Pixa | Typical closed assistant |
+|---|---|---|
+| **Choose your model** | Any OpenAI-compatible endpoint | Vendor's model only |
+| **Run fully offline** | Yes — point it at Ollama/vLLM/LM Studio | No |
+| **See what it costs** | Real billed cost, per request | Opaque or subscription |
+| **Code leaves your machine** | Only if you choose a cloud model | Always |
+| **Read the source** | MIT, all of it | No |
+
+If you can host a model, Pixa can use it — and your code never leaves your
+network.
+
+---
+
+## What it does
+
+- **Agent tasks** — describe a goal in plain English; Pixa plans it, reads the
+  relevant code, and makes the changes.
+- **Nothing lands without approval** — edits are staged as a change set. View
+  the diff, then Apply, Reject, or Revert per file.
+- **Commands are gated** — terminal commands and git commits never run without
+  an explicit click.
+- **Add any provider from the UI** — presets for Ollama, LM Studio, vLLM, and
+  NVIDIA NIM, or add a custom endpoint. Pixa asks your server which models it
+  has, so you don't guess at model names.
+- **Semantic code search** — find code by meaning ("where do we handle
+  retries"), not just exact text. Optional; see [Current status](#current-status).
+- **Real cost tracking** — actual billed cost per request and a running session
+  total, when your provider reports it.
+- **Project memory** — notes and decisions persist across chat sessions.
+- **MCP support** — connect third-party tool servers.
+
+---
+
+## Install
+
+**From a release build:**
+
 ```bash
-git clone <this-repo-url>
-cd pixa            # or the folder git created
+code --install-extension pixa-agent-<version>.vsix
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/WisdomBoost-LLC/PixaAgent.git
+cd PixaAgent
 npm install
-npm run compile
+npm run compile -w pixa-agent
+npm run package -w pixa-agent
+code --install-extension packages/pixa-agent/pixa-agent-*.vsix --force
 ```
 
-### 2. Run it — two ways
+Requires **Node.js 20+** and **VS Code 1.90+**.
 
-**A) Dev mode (for working on the code):**
-Open the repo folder in VS Code and press **F5** ("Run Pixa Agent"). A second
-VS Code window (the Extension Development Host) launches with Pixa loaded. Any
-code change → stop (Shift+F5) and press F5 again, or run `npm run watch`.
+---
 
-**B) Install it as a real extension (to just use it):**
+## Quick start
+
+1. Open a project folder in VS Code.
+2. Click the **Pixa** icon in the activity bar.
+3. Set up a model — pick one:
+
+   **Fastest — a hosted model**
+   `Ctrl+Shift+P` → **Pixa: Set OpenRouter API Key**
+   (free key at [openrouter.ai/keys](https://openrouter.ai/keys))
+
+   **Fully local — nothing leaves your machine**
+   Install [Ollama](https://ollama.com), then:
+   ```bash
+   ollama pull qwen2.5-coder:7b
+   ```
+   In Pixa, click the **⚙** icon → **Ollama** preset → **Fetch models** →
+   select your model → **Add provider** → **Reload window**.
+
+4. Pick your model from the dropdown and describe what you want.
+
+> **Model size matters for agent work.** Models under ~7B often *imitate* tool
+> calls as plain text instead of making real ones, so the agent appears to do
+> nothing. Pixa detects this and tells you. For editing and running commands,
+> use a 7B+ model; smaller ones are fine for chat.
+
+---
+
+## Using your own provider
+
+Everything is configurable from the **⚙ Providers** panel — no JSON editing
+required. Prefer config files? The same settings live in `pixa.providers`:
+
+```jsonc
+// settings.json
+"pixa.providers": {
+  "ollama": {
+    "name": "Ollama (local)",
+    "baseUrl": "http://localhost:11434/v1",
+    "requiresApiKey": false,
+    "models": {
+      "qwen2.5-coder:7b": { "name": "Qwen2.5 Coder 7B", "contextWindow": 32768 }
+    }
+  }
+}
+```
+
+Anything speaking the OpenAI chat-completions API works: **Ollama, vLLM,
+LM Studio, llama.cpp, NVIDIA NIM, Groq, Together, or your own gateway.**
+
+### Config reference
+
+| Field | Required | Meaning |
+|---|---|---|
+| `baseUrl` | yes | OpenAI-compatible base URL. `/chat/completions` is appended automatically. |
+| `models` | yes | Map of the provider's model name → display metadata. |
+| `name` | no | Display name for the provider. |
+| `requiresApiKey` | no | `false` for local servers needing no credentials. Default `true`. |
+| `models.<id>.name` | no | Display name. Defaults to the model key. |
+| `models.<id>.contextWindow` | no | Token budget. Default `128000`. |
+| `models.<id>.supportsTools` | no | `false` for chat-only models. Default `true`. |
+
+Custom models appear as `provider:model` (e.g. `ollama:qwen2.5-coder:7b`) —
+use that id for `pixa.defaultModel`.
+
+API keys are stored in VS Code's encrypted secret storage, never in your
+settings file.
+
+### Settings
+
+| Setting | Purpose |
+|---|---|
+| `pixa.providers` | Your own providers and models |
+| `pixa.defaultModel` | Model selected on startup |
+| `pixa.maxTokens` | Max completion tokens per request |
+| `pixa.mcpServers` | MCP tool servers to connect |
+
+---
+
+## How it works
+
+```
+Chat panel  →  Agent loop  →  your chosen model (the only outbound call)
+                   │
+                   ├─ Tools: read, search, edit, terminal, git, diagnostics
+                   ├─ Index: file map, symbols, semantic search
+                   └─ Every edit → staged change set → you approve → disk
+```
+
+Everything except the model request runs locally. Independent read-only tools
+run in parallel; anything that changes state runs one at a time, in order.
+
+Pixa is provider-agnostic by construction: the agent and UI only ever talk to a
+`ModelProvider` interface, so adding a backend never touches agent logic.
+
+---
+
+## Current status
+
+Pixa is **usable today** and we run it on its own codebase — but it's young,
+and we'd rather you know exactly where the edges are.
+
+**Solid**
+- Agent loop, planning, multi-file editing with diff approval
+- Provider system — hosted and self-hosted, configurable from the UI
+- Command-safety policy — known-destructive commands are blocked before you're
+  even asked; everything else still requires your approval
+- Secret redaction and an audit log
+- Cost tracking, chat history, MCP, project memory
+- 181 tests passing offline
+
+**Early / rough**
+- **Semantic search is optional and off by default.** It needs
+  `@huggingface/transformers` (~150MB plus a native binary), which is too large
+  to bundle. Without it, everything else works normally — you just lose
+  meaning-based search.
+- **The UI is functional, not beautiful.** A visual overhaul is underway.
+- **Small local models are unreliable for agent tasks** (see the note in Quick
+  start). Pixa detects and explains this, but can't fix it.
+
+**Not built yet**
+- Inline completion (ghost text) — designed, not implemented
+- Full process-level command isolation — a destructive-command *policy* ships
+  today (see Security), but approved commands still run in your own shell
+
+We'd rather ship an honest README than a flattering one. If something here is
+wrong or out of date, that's a bug — please [open an issue](https://github.com/WisdomBoost-LLC/PixaAgent/issues).
+
+---
+
+## Security
+
+**What protects you today:**
+- The agent **cannot write to disk** without you clicking Apply.
+- Terminal commands and git commits **always** require explicit approval.
+- **Known-destructive commands are hard-blocked** — patterns like `rm -rf /`,
+  `curl … | sh`, disk-overwrite, and force-push to `main` are refused before
+  you're even asked, so they can't slip through an over-eager Approve.
+- File access is restricted to the open workspace folder.
+- API keys live in VS Code secret storage, never in config files.
+
+> ⚠️ **Approved commands still run with your normal user permissions.** The
+> command policy is a guardrail against careless destruction, not a hard
+> boundary against a deliberately adversarial model — it's pattern-based and
+> won't catch obfuscated commands. Read commands before approving them, and
+> prefer trusted workspaces.
+
+Found a security issue? Please report it privately — see [SECURITY.md](SECURITY.md).
+
+---
+
+## Contributing
+
+Contributions are genuinely welcome, and good first issues are labelled as such.
+
 ```bash
-npm run package -w pixa-agent          # produces packages/pixa-agent/pixa-agent-<version>.vsix
-code --install-extension packages/pixa-agent/pixa-agent-0.3.8.vsix --force
-```
-Then restart VS Code — the Pixa icon appears in the activity bar permanently.
-
-### 3. First use
-1. Open any project folder.
-2. Command palette (`Ctrl+Shift+P`) → **Pixa: Set OpenRouter API Key** → paste your key.
-3. Click the **Pixa icon** in the activity bar, pick a model from the dropdown,
-   and describe a task.
-
-File edits appear as a reviewable change set (Diff / Apply / Reject); every
-terminal command and git commit asks for your approval first.
-
-### Common commands
-```bash
-npm run compile -w pixa-agent    # build the extension bundle
-npm run watch   -w pixa-agent    # rebuild on save (dev)
-npm run test    -w pixa-agent    # run the test suite (vitest)
-npm run typecheck -w pixa-agent  # TypeScript check, no emit
-npm run package -w pixa-agent    # build the installable .vsix
+npm install
+npm run compile -w pixa-agent       # build
+npm run test:offline -w pixa-agent  # fast test suite (~2s)
+npm run typecheck -w pixa-agent     # types
 ```
 
-## Design guarantees
+Press **F5** in VS Code to launch an Extension Development Host with Pixa
+loaded from source.
 
-- **Provider-agnostic.** The agent knows only the `ModelProvider` interface
-  ([types.ts](packages/pixa-agent/src/providers/types.ts)). OpenRouter is the
-  first backend; official APIs or self-hosted models are new classes plus a
-  registry entry — the IDE and agent never change.
-- **Data-driven models.** Add or swap models by editing
-  [models.json](packages/pixa-agent/models.json) — no code changes.
-- **Plugin-based capabilities.** Tools register through `ToolRegistry`;
-  future features (MCP servers, test runners, multi-agent dispatch, inline
-  completion) plug in without touching the loop. The indexer sits behind the
-  `RepoIndex` interface so an embedding backend can drop in later.
-- **Safety by construction.** Agent file writes only exist as a staged
-  `ChangeSet` until you apply them; all paths are jailed to the workspace;
-  commands and commits require an explicit click; the API key lives in VS
-  Code SecretStorage.
+**Two things to know:**
+- `npm test` runs the full suite, which downloads a small embedding model and
+  can be slow or flaky offline. Use `npm run test:offline` for day-to-day work —
+  it's what CI gates on.
+- Keep pure logic free of `vscode` imports. That separation is why most of the
+  codebase is unit-testable.
 
-## Extending
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-| To add…            | Do this                                                                 |
-|--------------------|-------------------------------------------------------------------------|
-| A model            | Add an entry to `packages/pixa-agent/models.json`                       |
-| A provider         | Implement `ModelProvider`, register it in `extension.ts`                |
-| A tool             | Implement `Tool` (schema + execute), register in `tools/registry.ts`    |
-| An index backend   | Implement `RepoIndex`, swap it in `extension.ts`                        |
+---
 
-## Building the branded IDE
+## License
 
-See [ide/README.md](ide/README.md). One script fetches VS Code OSS, applies
-Pixa branding, bundles pixa-agent as a built-in extension, and runs the OSS
-build (1–2 h first run). No VS Code source patches — upstream upgrades are a
-re-run, not a merge.
+[MIT](LICENSE) — use it, fork it, ship it.
 
-## Tests
-
-```bash
-npm run test        # vitest: registry, SSE parsing, change set, path jail,
-                    # context pruning, and a scripted end-to-end agent loop
-npm run typecheck
-```
-
-## What's in v2 (shipped)
-
-- **Editor context** — the agent sees your open file and selection, like Copilot
-- **@-file mentions** — `@src/server.js` in chat attaches that file
-- **MCP servers** — add tools via the `pixa.mcpServers` setting; they
-  auto-register into the agent (Copilot-parity extensibility)
-- **Diagnostics self-correction** — `get_diagnostics` reads compiler/linter
-  errors so the agent fixes its own mistakes after applying edits
-- **Session persistence** — chat + cost survive window reloads
-- **Revert** — applied changes can be rolled back from the change-set panel
-- **Cost tracking** — OpenRouter's real billed $ per request + session total
-
-## Roadmap
-
-Pixa is moving from a working prototype to a production-grade AI coding
-assistant — an internal alternative to Cursor / Copilot / Claude Code that the
-team owns end to end. The long-term goal is a coding assistant as capable as
-the market leaders, running on models we control (eventually a self-hosted
-60–70B model), with full cost transparency and no code leaving our
-infrastructure.
-
-### Phases
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **0 · Foundation** | Agent loop, tools, provider layer, safety rails | ✅ Done |
-| **1 · Core hardening** | Command sandboxing, secret redaction, audit log, Workspace Trust | Planned |
-| **2 · Retrieval** | Embedding-based semantic index, project memory, chunked retrieval | Planned |
-| **3 · IDE integration** | Inline (ghost-text) completion, in-editor diffs, keyboard accept/reject | Planned |
-| **4 · Agent system** | Multi-step planning, `TaskGraph`, parallel safe tools, plan preview | Planned |
-| **5 · Enterprise** | Inference gateway, admin dashboard, org policy (only at 100+ users) | Later |
-| **6 · Performance** | Latency-aware routing, streaming diffs, parallel calls | Later |
-| **7 · Polish & launch** | CI/CD, private registry, auto-update, onboarding | Later |
-
-### Team division (Wave 1 — Phases 1–5 in parallel)
-
-Each track sits behind a clean existing interface, so all five people build in
-parallel without colliding. The only shared seam (retrieval ↔ agent) meets at
-the `RepoIndex` interface.
-
-| Owner | Track | Scope |
-|-------|-------|-------|
-| **Dev A (lead)** | Agent system (Phase 4) | Planning pre-pass, `TaskGraph`, parallel tool execution, plan-preview UI, checkpoint/resume — plus integration & PR review |
-| **Dev B** | Retrieval (Phase 2) | `EmbeddingIndex` (implements `RepoIndex`), vector store, chunked retrieval, project memory, recall benchmark |
-| **Dev C** | IDE integration (Phase 3) | `InlineCompletionItemProvider`, ghost-text, in-editor diffs, keyboard accept/reject, <300ms p50 latency budget |
-| **Dev D** | Enterprise / gateway (Phase 5) | Node/Express inference gateway, admin dashboard, org allowlists — standalone, no dependencies |
-| **Dev E** | Hardening (Phase 1) | Secret redaction, security test suite, audit logging — plus floating support |
-
-**Wave 2 (Phase 6)** and **Wave 3 (Phase 7)** are convergence work by the same
-team after Wave 1 lands — the "*later*" items on each track fold in there.
-
-### Working rules
-
-- Keep the test suite at 100% pass before every merge (`npm run test -w pixa-agent`).
-- New non-trivial logic ships with a test.
-- Agent file writes always route through the staged `ChangeSet` — never write disk directly.
-- Terminal commands and git commits stay human-approved.
-
-Design docs: [spec](docs/superpowers/specs/2026-07-03-pixa-ide-design.md) ·
-[implementation plan](docs/superpowers/plans/2026-07-03-pixa-ide-v1.md)
+<div align="center">
+<sub>Built by <a href="https://github.com/WisdomBoost-LLC">Pixaflip Technologies</a></sub>
+</div>

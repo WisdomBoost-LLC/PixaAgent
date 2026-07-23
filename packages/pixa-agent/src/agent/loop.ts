@@ -5,6 +5,8 @@ import { ToolRegistry } from "../tools/registry";
 import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
 import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
+import { parsePlan } from "./planning";
+import { groupIntoBatches, looksLikeUnparsedToolCall, parseTextToolCalls } from "./taskGraph";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
@@ -26,6 +28,12 @@ export interface AgentLoopDeps {
   workspaceInfo: () => Promise<Omit<WorkspaceInfo, "projectMap">>;
   /** Completion-token cap per request; keeps free/low-balance accounts under their limit. */
   maxTokens?: () => number;
+  /**
+   * Called after each tool-calling iteration so the host can persist progress
+   * mid-task. Without it, a reload/crash during a long task loses every tool
+   * result gathered so far.
+   */
+  onCheckpoint?: () => void;
 }
 
 /**
@@ -91,6 +99,7 @@ export class AgentLoop {
       const triedModels = new Set<string>([entry.id]);
       let fallbackHops = 0;
       let notifiedModelChange = false;
+      let planEmitted = false;
       this.history.push({ role: "user", content: userMessage });
 
       const base = await this.deps.workspaceInfo();
@@ -183,6 +192,15 @@ export class AgentLoop {
           ctx.emit({ type: "active-model-changed", modelId: entry.id });
         }
 
+        // Planning pre-pass: the system prompt asks the model to state a plan
+        // before its first tool call, so the plan is already in this first
+        // response — parse and surface it without a separate model call.
+        if (!planEmitted) {
+          planEmitted = true;
+          const plan = parsePlan(result.content);
+          if (plan.steps.length > 0) ctx.emit({ type: "plan", steps: plan.steps });
+        }
+
         if (result.usage) {
           const requestCostUsd = result.usage.costUsd;
           if (requestCostUsd !== null) this.sessionCostUsd += requestCostUsd;
@@ -196,9 +214,33 @@ export class AgentLoop {
         }
 
         if (result.toolCalls.length === 0) {
-          this.history.push({ role: "assistant", content: result.content });
-          ctx.emit({ type: "assistant-done" });
-          return;
+          // Some runtimes (e.g. Ollama with qwen2.5-coder) return a valid tool
+          // call as JSON text in `content` instead of the native tool_calls
+          // field. Recover it — but only for tools that actually exist — so
+          // local coding models can run agent tasks. If nothing valid parses
+          // (unknown tool, or just a JSON-shaped answer), fall through and show
+          // the content as a normal reply.
+          if (entry.supportsTools && looksLikeUnparsedToolCall(result.content)) {
+            const knownTools = new Set(tools.schemas().map((s) => s.name));
+            const recovered = parseTextToolCalls(result.content, knownTools);
+            if (recovered.length > 0) {
+              result.toolCalls = recovered.map((c, i) => ({
+                id: `text-call-${iteration}-${i}`,
+                name: c.name,
+                arguments: c.arguments,
+              }));
+              result.content = ""; // extracted as a call — don't also render it as text
+              // fall through to the execution block below (do NOT return)
+            } else {
+              this.history.push({ role: "assistant", content: result.content });
+              ctx.emit({ type: "assistant-done" });
+              return;
+            }
+          } else {
+            this.history.push({ role: "assistant", content: result.content });
+            ctx.emit({ type: "assistant-done" });
+            return;
+          }
         }
 
         this.history.push({
@@ -208,22 +250,37 @@ export class AgentLoop {
         });
         if (result.content) ctx.emit({ type: "assistant-done" });
 
-        for (const call of result.toolCalls) {
+        // Independent read-only calls run concurrently; anything that mutates
+        // state or has side effects runs alone, in order (see taskGraph.ts).
+        for (const batch of groupIntoBatches(result.toolCalls)) {
           if (signal.aborted) throw abortError();
-          ctx.emit({
-            type: "tool-start",
-            callId: call.id,
-            name: call.name,
-            summary: summarizeArgs(call.arguments),
+
+          for (const call of batch) {
+            ctx.emit({
+              type: "tool-start",
+              callId: call.id,
+              name: call.name,
+              summary: summarizeArgs(call.arguments),
+            });
+          }
+
+          // tools.run never rejects — it converts failures into result strings.
+          const outputs = await Promise.all(batch.map((c) => tools.run(c.name, c.arguments, ctx)));
+
+          // Results are recorded in call order so each pairs with its tool_call_id.
+          batch.forEach((call, i) => {
+            this.history.push({ role: "tool", content: outputs[i], toolCallId: call.id });
+            ctx.emit({ type: "tool-end", callId: call.id, result: truncateForUi(outputs[i]) });
           });
-          const output = await tools.run(call.name, call.arguments, ctx);
-          this.history.push({ role: "tool", content: output, toolCallId: call.id });
-          ctx.emit({ type: "tool-end", callId: call.id, result: truncateForUi(output) });
           ctx.emit({
             type: "changeset-updated",
             files: ctx.changeSet.list().map((f) => ({ path: f.path, status: f.status })),
           });
         }
+
+        // History is consistent here (assistant turn + all its tool results),
+        // so it's the safe point to persist progress for a long-running task.
+        this.deps.onCheckpoint?.();
       }
 
       ctx.emit({

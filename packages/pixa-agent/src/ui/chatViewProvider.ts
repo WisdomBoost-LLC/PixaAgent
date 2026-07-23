@@ -14,7 +14,13 @@ import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
+<<<<<<< HEAD
 import { OPENROUTER_API_KEY_SECRET } from "../config";
+=======
+import type { ProvidersConfig } from "../providers/config";
+import { validateProviderForm, parseModelsResponse, modelsEndpointUrl } from "../providers/providerForm";
+import { providerSecretKey } from "../providers/secretKeys";
+>>>>>>> main
 
 const SESSIONS_KEY = "pixa.sessions.v1";
 const MAX_SESSIONS = 30;
@@ -46,7 +52,23 @@ type WebviewMessage =
   | { type: "load-session"; id: string }
   | { type: "delete-session"; id: string }
   | { type: "set-api-key" }
+<<<<<<< HEAD
   | { type: "set-gateway-url" };
+=======
+  | { type: "list-providers" }
+  | { type: "fetch-models"; baseUrl: string; apiKey?: string }
+  | {
+      type: "save-provider";
+      id: string;
+      name: string;
+      baseUrl: string;
+      requiresApiKey: boolean;
+      apiKey?: string;
+      models: { id: string; name?: string }[];
+    }
+  | { type: "delete-provider"; id: string }
+  | { type: "reload-window" };
+>>>>>>> main
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
   private view: vscode.WebviewView | undefined;
@@ -114,6 +136,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         };
       },
       maxTokens: () => vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ?? 8192,
+      // Persist mid-task so a reload/crash during a long run doesn't discard
+      // the work already done.
+      onCheckpoint: () => this.saveSession(),
     });
   }
 
@@ -352,6 +377,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
       }
+<<<<<<< HEAD
       case "set-gateway-url": {
         await vscode.commands.executeCommand("pixa.setGatewayUrl");
         this.post({ type: "gateway-url-changed", gatewayUrl: this.currentGatewayUrl() } as any);
@@ -365,6 +391,116 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim() ||
       "http://localhost:8080/v1/chat"
     );
+=======
+      case "list-providers":
+        this.postProviders();
+        break;
+      case "fetch-models": {
+        const result = await this.fetchModels(msg.baseUrl, msg.apiKey);
+        if (result.ok) {
+          this.post({ type: "fetched-models", models: result.models });
+        } else {
+          this.post({ type: "fetch-models-failed", reason: result.reason });
+        }
+        break;
+      }
+      case "save-provider":
+        await this.saveProvider(msg);
+        break;
+      case "delete-provider":
+        await this.deleteProvider(msg.id);
+        break;
+      case "reload-window":
+        await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        break;
+    }
+  }
+
+  /* ---------- provider management ---------- */
+
+  private postProviders(): void {
+    const cfg = vscode.workspace.getConfiguration("pixa").get<ProvidersConfig>("providers") ?? {};
+    this.post({
+      type: "providers",
+      list: Object.entries(cfg).map(([id, p]) => ({
+        id,
+        name: p.name?.trim() || id,
+        baseUrl: p.baseUrl,
+        modelCount: Object.keys(p.models ?? {}).length,
+      })),
+    });
+  }
+
+  private async fetchModels(
+    baseUrl: string,
+    apiKey?: string
+  ): Promise<{ ok: true; models: string[] } | { ok: false; reason: string }> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(modelsEndpointUrl(baseUrl), {
+        signal: controller.signal,
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      });
+      if (!res.ok) return { ok: false, reason: `Server responded with ${res.status}.` };
+      const models = parseModelsResponse(await res.json());
+      if (models.length === 0) return { ok: false, reason: "No models found in the server's response." };
+      return { ok: true, models };
+    } catch (e: any) {
+      return { ok: false, reason: e?.message ?? "Request failed." };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async saveProvider(msg: {
+    id: string;
+    name: string;
+    baseUrl: string;
+    requiresApiKey: boolean;
+    apiKey?: string;
+    models: { id: string; name?: string }[];
+  }): Promise<void> {
+    const config = vscode.workspace.getConfiguration("pixa");
+    const cfg = config.get<ProvidersConfig>("providers") ?? {};
+
+    const result = validateProviderForm(
+      { id: msg.id, name: msg.name, baseUrl: msg.baseUrl, requiresApiKey: msg.requiresApiKey, models: msg.models },
+      Object.keys(cfg)
+    );
+    if (!result.ok) {
+      const message = Object.values(result.errors).filter(Boolean).join(" ");
+      this.post({ type: "provider-error", message });
+      return;
+    }
+
+    const id = msg.id.trim();
+    try {
+      await config.update("providers", { ...cfg, [id]: result.config }, vscode.ConfigurationTarget.Global);
+    } catch (e: any) {
+      this.post({ type: "provider-error", message: `Failed to save: ${e?.message ?? e}` });
+      return;
+    }
+
+    if (msg.requiresApiKey && msg.apiKey?.trim()) {
+      await this.context.secrets.store(providerSecretKey(id), msg.apiKey.trim());
+    }
+
+    this.post({ type: "provider-saved", id });
+    this.postProviders();
+  }
+
+  private async deleteProvider(id: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration("pixa");
+    const cfg = config.get<ProvidersConfig>("providers") ?? {};
+    if (!(id in cfg)) return;
+    const next = { ...cfg };
+    delete next[id];
+    await config.update("providers", next, vscode.ConfigurationTarget.Global);
+    await this.context.secrets.delete(providerSecretKey(id));
+    this.post({ type: "provider-deleted", id });
+    this.postProviders();
+>>>>>>> main
   }
 
   private async onChangeSetAction(
@@ -483,6 +619,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
       <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
       <button id="new-session" class="icon-btn" title="New chat">＋</button>
+      <button id="show-providers" class="icon-btn" title="Providers">⚙</button>
     </div>
     <div id="history-panel" class="hidden">
       <div id="history-header">
@@ -490,6 +627,44 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         <button id="close-history" class="icon-btn" title="Back to chat">✕</button>
       </div>
       <div id="history-list"></div>
+    </div>
+    <div id="providers-panel" class="hidden">
+      <div id="providers-header">
+        <span>Providers</span>
+        <button id="close-providers" class="icon-btn" title="Back to chat">✕</button>
+      </div>
+      <div id="providers-body">
+        <div id="pf-reload-banner" class="hidden">
+          Provider added. <button id="pf-reload-btn">Reload window</button>
+        </div>
+
+        <div class="section-title">Configured</div>
+        <div id="providers-list"></div>
+
+        <div class="section-title">Quick setup</div>
+        <div id="preset-cards"></div>
+
+        <form id="provider-form">
+          <div class="section-title">Add provider</div>
+          <div id="provider-error" class="hidden"></div>
+          <label>Provider ID<input id="pf-id" placeholder="ollama" autocomplete="off"></label>
+          <label>Display name<input id="pf-name" placeholder="Ollama (local)" autocomplete="off"></label>
+          <label>Base URL<input id="pf-baseurl" placeholder="http://localhost:11434/v1" autocomplete="off"></label>
+          <label class="pf-checkbox"><input type="checkbox" id="pf-requires-key"> Requires API key</label>
+          <label id="pf-apikey-row" class="hidden">API key<input id="pf-apikey" type="password" autocomplete="off"></label>
+
+          <div class="section-title">Models</div>
+          <div class="pf-fetch-row">
+            <button type="button" id="pf-fetch-models">Fetch models</button>
+            <span id="pf-fetch-status"></span>
+          </div>
+          <div id="pf-fetched-list"></div>
+          <div id="pf-manual-list"></div>
+          <button type="button" id="pf-add-model-row">+ Add model manually</button>
+
+          <button type="submit" id="pf-submit">Add provider</button>
+        </form>
+      </div>
     </div>
     <div id="messages">
       <div id="welcome">
