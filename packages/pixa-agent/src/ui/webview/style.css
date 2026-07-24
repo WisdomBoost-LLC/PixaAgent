@@ -31,6 +31,38 @@ body {
   padding: 3px;
 }
 
+/* Thinking-effort / reasoning selector — dark neutral box */
+#reasoning-select {
+  background: #1a1a1a;
+  color: #cccccc;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 0.82em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 20px;
+}
+#reasoning-select:hover {
+  border-color: #555;
+  box-shadow: 0 0 0 1px #55555540;
+}
+#reasoning-select:focus {
+  outline: none;
+  border-color: #666;
+  box-shadow: 0 0 0 2px #44444455;
+}
+#reasoning-select option {
+  background: #1a1a1a;
+  color: #cccccc;
+}
+
 #session-cost {
   align-self: center;
   font-size: 0.85em;
@@ -287,6 +319,16 @@ button:hover { background: var(--vscode-button-hoverBackground); }
   font-family: inherit;
 }
 #input:focus { outline: 1px solid var(--vscode-focusBorder); }
+#input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--vscode-input-background);
+  color: var(--vscode-descriptionForeground);
+}
+#send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 #composer-actions { display: flex; justify-content: flex-end; gap: 6px; }
 #stop { background: var(--vscode-inputValidation-errorBorder, #c00); }
 
