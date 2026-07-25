@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatResult, ChatRequest, ModelProvider, StreamDelta, ModelEntry } from "../providers/types";
+import type { ChatMessage, ChatResult, ChatRequest, ModelProvider, StreamDelta, ModelEntry, ReasoningEffort } from "../providers/types";
 import { ProviderRegistry } from "../providers/registry";
 import { RateLimitError } from "../providers/errors";
 import { ToolRegistry } from "../tools/registry";
@@ -92,7 +92,12 @@ export class AgentLoop {
     }
   }
 
-  async run(userMessage: string, modelId: string, signal: AbortSignal): Promise<void> {
+  async run(
+    userMessage: string,
+    modelId: string,
+    signal: AbortSignal,
+    reasoningEffort?: ReasoningEffort
+  ): Promise<void> {
     const { registry, tools, models, ctx } = this.deps;
     try {
       let { provider, entry } = registry.resolve(modelId, models);
@@ -123,6 +128,10 @@ export class AgentLoop {
               messages,
               tools: entry.supportsTools ? tools.schemas() : [],
               maxTokens: this.deps.maxTokens?.(),
+              // Re-checked against the *current* entry every iteration, so a
+              // mid-task fallback hop to a non-supporting model correctly
+              // drops this instead of carrying a stale value forward.
+              reasoningEffort: entry.supportsReasoningEffort ? reasoningEffort : undefined,
             },
             (d) => {
               if (d.text) ctx.emit({ type: "assistant-delta", text: d.text });
@@ -338,5 +347,9 @@ function abortError(): Error {
 }
 
 function isAbort(e: unknown): boolean {
-  return e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"));
+  // Only treat real AbortError as a user stop. Matching message text that
+  // merely contains "aborted" was wrong — fetch/timeout wrappers often say
+  // "This operation was aborted", which made connect timeouts show as
+  // "Stopped." instead of the actual timeout/network error.
+  return e instanceof Error && e.name === "AbortError";
 }

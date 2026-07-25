@@ -388,3 +388,14 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .changeset-bulk button.secondary:hover {
   background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground));
 }
+
+/* Thinking-effort selector — sits next to the model picker, hidden unless
+   the selected model declares support. */
+#reasoning-select {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 3px;
+  padding: 3px;
+  max-width: 90px;
+}
