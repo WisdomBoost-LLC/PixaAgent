@@ -8,8 +8,12 @@
   const sendBtn = $("send");
   const stopBtn = $("stop");
   const modelSelect = $("model-select");
+  const reasoningSelect = $("reasoning-select");
   const changesetEl = $("changeset");
   const changesetFiles = $("changeset-files");
+
+  // id -> supportsReasoningEffort, from the host's init message.
+  const reasoningSupport = new Map();
 
   let currentAssistantEl = null;
   let running = false;
@@ -93,13 +97,18 @@
     switch (msg.type) {
       case "init": {
         modelSelect.innerHTML = "";
+        reasoningSupport.clear();
         for (const m of msg.models) {
           const opt = document.createElement("option");
           opt.value = m.id;
           opt.textContent = m.label;
           if (m.id === msg.currentModelId) opt.selected = true;
           modelSelect.appendChild(opt);
+          reasoningSupport.set(m.id, !!m.supportsReasoningEffort);
         }
+        populateReasoningOptions();
+        updateReasoningVisibility(msg.currentModelId);
+        if (msg.currentReasoningEffort) reasoningSelect.value = msg.currentReasoningEffort;
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
       }
@@ -123,6 +132,8 @@
         break;
       case "active-model-changed":
         modelSelect.value = msg.modelId;
+        // The host clears its effort on any model change, so mirror that here.
+        updateReasoningVisibility(msg.modelId);
         break;
       case "plan": {
         const items = msg.steps.map((s) => "<li>" + escapeHtml(s.text) + "</li>").join("");
@@ -294,6 +305,34 @@
     }
   }
 
+  /* ---------- thinking-effort selector ---------- */
+
+  // "" is Default: send nothing and let the provider choose.
+  const REASONING_OPTIONS = [
+    ["", "Default"],
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+  ];
+
+  function populateReasoningOptions() {
+    if (reasoningSelect.options.length) return; // static list, build once
+    for (const [value, label] of REASONING_OPTIONS) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      reasoningSelect.appendChild(opt);
+    }
+  }
+
+  // Hidden entirely for models that don't declare support — a visible control
+  // that silently does nothing is worse than no control.
+  function updateReasoningVisibility(modelId) {
+    const supports = !!reasoningSupport.get(modelId);
+    reasoningSelect.classList.toggle("hidden", !supports);
+    if (!supports) reasoningSelect.value = "";
+  }
+
   /* ---------- providers view ---------- */
 
   // Mirrors src/providers/providerForm.ts's PRESETS. Duplicated deliberately:
@@ -426,8 +465,13 @@
       send();
     }
   });
-  modelSelect.addEventListener("change", () =>
-    vscode.postMessage({ type: "selectModel", modelId: modelSelect.value })
+  modelSelect.addEventListener("change", () => {
+    vscode.postMessage({ type: "selectModel", modelId: modelSelect.value });
+    // Host resets effort to null on every model switch — keep the UI in step.
+    updateReasoningVisibility(modelSelect.value);
+  });
+  reasoningSelect.addEventListener("change", () =>
+    vscode.postMessage({ type: "selectReasoningEffort", value: reasoningSelect.value || null })
   );
   $("new-session").addEventListener("click", () => {
     clearMessages();
