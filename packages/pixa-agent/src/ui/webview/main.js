@@ -237,6 +237,7 @@
     changesetEl.classList.toggle("hidden", files.length === 0);
     changesetFiles.innerHTML = "";
     $("apply-all").classList.toggle("hidden", pending.length === 0);
+    $("reject-all").classList.toggle("hidden", pending.length === 0);
     for (const f of files) {
       const row = document.createElement("div");
       row.className = "cs-row cs-" + f.status;
@@ -441,6 +442,9 @@
   $("close-history").addEventListener("click", () => $("history-panel").classList.add("hidden"));
   $("apply-all").addEventListener("click", () =>
     vscode.postMessage({ type: "changeset-action", path: null, action: "apply-all" })
+  );
+  $("reject-all").addEventListener("click", () =>
+    vscode.postMessage({ type: "changeset-action", path: null, action: "reject-all" })
   );
   $("set-key-link").addEventListener("click", (e) => {
     e.preventDefault();

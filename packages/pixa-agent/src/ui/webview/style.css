@@ -378,3 +378,13 @@ button:hover { background: var(--vscode-button-hoverBackground); }
   align-items: center;
   justify-content: space-between;
 }
+
+/* Bulk apply/reject pair in the changeset header. */
+.changeset-bulk { display: flex; gap: 6px; }
+.changeset-bulk button.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.changeset-bulk button.secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground));
+}

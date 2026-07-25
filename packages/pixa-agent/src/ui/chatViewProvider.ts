@@ -42,7 +42,7 @@ type WebviewMessage =
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
   | { type: "approval-response"; requestId: string; approved: boolean }
-  | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
+  | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "reject-all" | "open-diff" | "revert" }
   | { type: "new-session" }
   | { type: "list-sessions" }
   | { type: "load-session"; id: string }
@@ -471,7 +471,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private async onChangeSetAction(
     relPath: string | null,
-    action: "apply" | "reject" | "apply-all" | "open-diff" | "revert"
+    action: "apply" | "reject" | "apply-all" | "reject-all" | "open-diff" | "revert"
   ): Promise<void> {
     try {
       if (action === "open-diff" && relPath) {
@@ -481,6 +481,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       if (action === "apply-all") {
         for (const change of this.changeSet.list()) {
           if (change.status === "pending") await this.applyChange(change.path);
+        }
+      } else if (action === "reject-all") {
+        for (const change of this.changeSet.list()) {
+          if (change.status === "pending") this.changeSet.markRejected(change.path);
         }
       } else if (relPath) {
         if (action === "apply") await this.applyChange(relPath);
@@ -642,7 +646,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     <div id="changeset" class="hidden">
       <div id="changeset-header">
         <span>Proposed changes <span class="changeset-hint">— click a file to review</span></span>
-        <button id="apply-all">Apply all</button>
+        <span class="changeset-bulk">
+          <button id="reject-all" class="secondary">Reject all</button>
+          <button id="apply-all">Apply all</button>
+        </span>
       </div>
       <div id="changeset-files"></div>
     </div>
