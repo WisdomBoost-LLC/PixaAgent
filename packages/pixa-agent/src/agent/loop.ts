@@ -12,8 +12,8 @@ const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
 // OpenRouter's free-tier caps (20 req/min, 50/day) are GLOBAL PER ACCOUNT,
 // not per model — so hopping to another free model cannot escape a per-minute
-// cap. The right response (what Claude Code does) is to WAIT out the window on
-// the same model. Hence: patient retries first, hop only as a last resort.
+// cap. The right response is to WAIT out the window on the same model, not
+// bounce between models. Hence: patient retries first, hop only as a last resort.
 const MAX_RATE_LIMIT_RETRIES = 4;
 const MAX_RETRY_WAIT_SECONDS = 60;
 // Hopping only helps for genuine per-MODEL upstream congestion; keep it rare

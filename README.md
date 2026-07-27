@@ -57,6 +57,10 @@ network.
 - **Add any provider from the UI** — presets for Ollama, LM Studio, vLLM, and
   NVIDIA NIM, or add a custom endpoint. Pixa asks your server which models it
   has, so you don't guess at model names.
+- **Reasoning-effort control** — for models that support it, choose how hard
+  the model thinks (low/medium/high), trading speed and cost for quality.
+- **Batch review** — Apply all or Reject all staged changes at once, or go
+  file by file.
 - **Semantic code search** — find code by meaning ("where do we handle
   retries"), not just exact text. Optional; see [Current status](#current-status).
 - **Real cost tracking** — actual billed cost per request and a running session
@@ -67,6 +71,13 @@ network.
 ---
 
 ## Install
+
+**From the VS Code Marketplace (easiest):**
+
+Search **"Pixa Agent"** in the Extensions view (`Ctrl+Shift+X`), or:
+```bash
+code --install-extension PIXAFLIP.pixa-agent
+```
 
 **From a release build:**
 
@@ -102,17 +113,21 @@ Requires **Node.js 20+** and **VS Code 1.90+**.
    **Fully local — nothing leaves your machine**
    Install [Ollama](https://ollama.com), then:
    ```bash
-   ollama pull qwen2.5-coder:7b
+   ollama pull llama3.1:8b
    ```
    In Pixa, click the **⚙** icon → **Ollama** preset → **Fetch models** →
    select your model → **Add provider** → **Reload window**.
 
 4. Pick your model from the dropdown and describe what you want.
 
-> **Model size matters for agent work.** Models under ~7B often *imitate* tool
-> calls as plain text instead of making real ones, so the agent appears to do
-> nothing. Pixa detects this and tells you. For editing and running commands,
-> use a 7B+ model; smaller ones are fine for chat.
+> **Model size and runtime both matter for agent work.** Models under ~7B
+> often *imitate* tool calls as plain text instead of making real ones, so the
+> agent appears to do nothing — Pixa detects this and tells you rather than
+> failing silently. Reliability also varies by runtime, not just size: we've
+> seen `qwen2.5-coder` return tool calls as text through Ollama even though
+> it's a genuinely capable model, while `llama3.1` calls tools natively and
+> reliably. If a local model seems to "talk about" what it's going to do
+> instead of doing it, try `llama3.1:8b` or a cloud model for that task.
 
 ---
 
@@ -129,7 +144,7 @@ required. Prefer config files? The same settings live in `pixa.providers`:
     "baseUrl": "http://localhost:11434/v1",
     "requiresApiKey": false,
     "models": {
-      "qwen2.5-coder:7b": { "name": "Qwen2.5 Coder 7B", "contextWindow": 32768 }
+      "llama3.1:8b": { "name": "Llama 3.1 8B", "contextWindow": 32768 }
     }
   }
 }
@@ -197,16 +212,19 @@ and we'd rather you know exactly where the edges are.
   even asked; everything else still requires your approval
 - Secret redaction and an audit log
 - Cost tracking, chat history, MCP, project memory
-- 181 tests passing offline
+- Reasoning-effort control, batch Apply all / Reject all
+- 204 tests passing offline
 
 **Early / rough**
 - **Semantic search is optional and off by default.** It needs
   `@huggingface/transformers` (~150MB plus a native binary), which is too large
   to bundle. Without it, everything else works normally — you just lose
   meaning-based search.
-- **The UI is functional, not beautiful.** A visual overhaul is underway.
-- **Small local models are unreliable for agent tasks** (see the note in Quick
-  start). Pixa detects and explains this, but can't fix it.
+- **The UI is functional, not beautiful.** A visual overhaul is planned but
+  not started.
+- **Local model reliability for agent tasks varies by model *and* runtime**
+  (see the note in Quick start). Pixa detects a failure to call tools and
+  explains it, but can't fix a model/runtime combination that won't cooperate.
 
 **Not built yet**
 - Inline completion (ghost text) — designed, not implemented
