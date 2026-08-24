@@ -106,9 +106,17 @@ describe("OpenRouterProvider — reasoning field in request body", () => {
     expect(body).not.toHaveProperty("reasoning");
   });
 
-  it("omits `reasoning` for a non-openrouter provider even if reasoningEffort is set", async () => {
-    // Custom provider (id !== "openrouter") must NOT forward reasoning — unknown
-    // fields can cause errors on arbitrary OpenAI-compatible servers.
+  it("forwards `reasoning` to a custom provider when the caller opted in", async () => {
+    // Deliberately changed from an earlier "custom providers never get
+    // reasoning" rule. That rule made `supportsReasoningEffort` in
+    // `pixa.providers` a no-op: the UI showed the effort picker (it keys off
+    // the same flag) but the field was dropped on the wire — a dead control.
+    //
+    // Safety still holds because the gate lives at the caller: AgentLoop only
+    // sets reasoningEffort when the resolved ModelEntry declares support, and
+    // for custom providers that flag only exists if the user set it. So a
+    // server never sees this field unless someone explicitly said it handles
+    // it. The next test covers the default (no opt-in ⇒ nothing sent).
     const provider = new OpenRouterProvider(async () => "sk-test", {
       id: "custom-provider",
       endpoint: "http://localhost:9999/v1/chat/completions",
@@ -119,6 +127,18 @@ describe("OpenRouterProvider — reasoning field in request body", () => {
       { ...baseReq, reasoningEffort: "high" },
       signal
     );
+    expect(body.reasoning).toEqual({ effort: "high" });
+  });
+
+  it("sends nothing to a custom provider that did not opt in", async () => {
+    // The realistic default: user adds an Ollama/vLLM endpoint without setting
+    // supportsReasoningEffort, so AgentLoop leaves reasoningEffort undefined.
+    const provider = new OpenRouterProvider(async () => "sk-test", {
+      id: "custom-provider",
+      endpoint: "http://localhost:9999/v1/chat/completions",
+      requiresApiKey: true,
+    });
+    const body = await captureRequestBody(provider, { ...baseReq }, signal);
     expect(body).not.toHaveProperty("reasoning");
   });
 

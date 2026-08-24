@@ -164,6 +164,7 @@ LM Studio, llama.cpp, NVIDIA NIM, Groq, Together, or your own gateway.**
 | `models.<id>.name` | no | Display name. Defaults to the model key. |
 | `models.<id>.contextWindow` | no | Token budget. Default `128000`. |
 | `models.<id>.supportsTools` | no | `false` for chat-only models. Default `true`. |
+| `models.<id>.supportsReasoningEffort` | no | `true` if the endpoint accepts a thinking-effort setting. Shows a Low/Medium/High picker next to the model. Sent as OpenRouter's `reasoning: { effort }` shape. Default `false`. |
 
 Custom models appear as `provider:model` (e.g. `ollama:qwen2.5-coder:7b`) —
 use that id for `pixa.defaultModel`.

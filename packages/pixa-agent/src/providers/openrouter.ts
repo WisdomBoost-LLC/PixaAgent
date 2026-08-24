@@ -158,14 +158,20 @@ export class OpenRouterProvider implements ModelProvider {
     // Cost accounting is an OpenRouter extension; other OpenAI-compatible
     // servers may reject unknown fields, so only send it to OpenRouter.
     if (this.isOpenRouter) body.usage = { include: true };
-    // Reasoning-effort is likewise an OpenRouter-forwarded extension, and the
-    // caller (AgentLoop) only sets req.reasoningEffort when the resolved
-    // ModelEntry declared supportsReasoningEffort — so no default is sent and
-    // non-supporting models never see this field at all. OpenRouter's current
-    // schema nests it under `reasoning: { effort }` rather than a top-level
-    // `reasoning_effort` — reconfirm against their docs if requests start
-    // getting rejected, since this has changed shape before.
-    if (this.isOpenRouter && req.reasoningEffort) {
+    // Reasoning-effort is gated on the CALLER, not on the endpoint: AgentLoop
+    // only sets req.reasoningEffort when the resolved ModelEntry declared
+    // supportsReasoningEffort. For bundled models that flag comes from
+    // models.json; for a custom provider it comes from the user explicitly
+    // opting in via `pixa.providers`. Gating here on isOpenRouter instead
+    // would silently drop the field for custom endpoints while the UI still
+    // showed the picker — a dead control, and it would make the user's own
+    // opt-in a no-op.
+    //
+    // Shape note: this is OpenRouter's schema (`reasoning: { effort }`), not
+    // OpenAI's top-level `reasoning_effort`. A custom endpoint that expects a
+    // different shape may ignore it; that is the tradeoff of honouring an
+    // explicit opt-in, and it stays low-risk because the flag defaults off.
+    if (req.reasoningEffort) {
       body.reasoning = { effort: req.reasoningEffort };
     }
 

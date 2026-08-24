@@ -296,8 +296,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           type: "init",
           models: this.models
             .filter((m) => m.provider !== "local-embeddings")
-            .map((m) => ({ id: m.id, label: m.label })),
+            .map((m) => ({
+              id: m.id,
+              label: m.label,
+              // Drives whether the webview shows the thinking-effort picker.
+              supportsReasoningEffort: m.supportsReasoningEffort === true,
+            })),
           currentModelId: this.currentModelId,
+          currentReasoningEffort: this.currentReasoningEffort,
           hasApiKey,
         } as any);
         this.restoreSession();
@@ -329,7 +335,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "selectModel":
         if (this.models.some((m) => m.id === msg.modelId && m.provider !== "local-embeddings")) {
           this.currentModelId = msg.modelId;
+          // The previous effort choice may not apply to the new model — a
+          // model that doesn't support it would reject the field outright.
+          this.currentReasoningEffort = null;
         }
+        break;
+      case "selectReasoningEffort":
+        this.currentReasoningEffort = msg.value;
         break;
       case "approval-response": {
         const resolve = this.pendingApprovals.get(msg.requestId);
@@ -382,6 +394,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "reload-window":
         await vscode.commands.executeCommand("workbench.action.reloadWindow");
         break;
+      default: {
+        // Compile-time exhaustiveness guard. Adding a message to
+        // WebviewMessage without handling it here becomes a type error rather
+        // than a silent no-op — which is exactly how the reasoning-effort
+        // handler went missing and shipped broken.
+        const unhandled: never = msg;
+        void unhandled;
+      }
     }
   }
 

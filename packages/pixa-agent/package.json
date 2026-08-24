@@ -2,7 +2,7 @@
   "name": "pixa-agent",
   "displayName": "Pixa Agent",
   "description": "AI coding agent for VS Code — bring your own model.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "PIXAFLIP",
   "icon": "media/icon.png",
   "author": "Pixaflip Technologies",
@@ -116,6 +116,11 @@
                       "type": "boolean",
                       "default": true,
                       "description": "Set false for chat-only models that cannot call tools."
+                    },
+                    "supportsReasoningEffort": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Set true if this endpoint accepts a thinking-effort setting. Shows a Low/Medium/High picker next to the model. Sent using OpenRouter's `reasoning: { effort }` shape."
                     }
                   }
                 }

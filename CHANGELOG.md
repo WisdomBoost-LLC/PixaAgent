@@ -2,6 +2,30 @@
 
 All notable changes to Pixa Agent are documented here.
 
+## [0.6.2] — 2026-07-28
+
+### Added
+- Thinking-effort picker (Low/Medium/High) for models that support it. Appears
+  next to the model dropdown only when the selected model declares support, and
+  resets on model switch. Custom providers can opt in with
+  `supportsReasoningEffort: true` in `pixa.providers`.
+- "Reject all" for staged changes, alongside the existing "Apply all"
+- Recovery for tool calls that some local-model runtimes return as text instead
+  of the native `tool_calls` field, so smaller local coding models can run agent
+  tasks. Only calls naming a real registered tool are executed.
+
+### Fixed
+- Thinking-effort picker never appeared, and selecting a level did nothing —
+  the capability flag wasn't included in the payload sent to the panel and the
+  selection handler was missing. Added a compile-time exhaustiveness check on
+  the message handler so an unhandled message is now a build error.
+- Effort was silently dropped for custom providers even when explicitly enabled,
+  making the picker a dead control on non-OpenRouter endpoints
+- Plan checklist never rendered for most models — the parser expected a numbered
+  list but the prompt didn't ask for one
+- Reviewing a change before applying it was easy to miss; the proposed file name
+  is now clickable and opens the diff directly
+
 ## [0.6.1] — 2026-07-23
 
 ### Added
