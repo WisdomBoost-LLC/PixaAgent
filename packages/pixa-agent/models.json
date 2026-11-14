@@ -2,25 +2,17 @@
   "models": [
     {
       "id": "nemotron-free",
-      "label": "Nemotron 3 Super 120B — Free",
+      "label": "Nemotron 3 Ultra 550B — Free",
       "provider": "openrouter",
-      "slug": "nvidia/nemotron-3-super-120b-a12b:free",
+      "slug": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "contextWindow": 1000000,
       "supportsTools": true
     },
     {
-      "id": "laguna-m-free",
-      "label": "Poolside Laguna M.1 — Free",
+      "id": "gemma-free",
+      "label": "Gemma 4 31B — Free",
       "provider": "openrouter",
-      "slug": "poolside/laguna-m.1:free",
-      "contextWindow": 262144,
-      "supportsTools": true
-    },
-    {
-      "id": "laguna-xs-free",
-      "label": "Poolside Laguna XS 2.1 — Free",
-      "provider": "openrouter",
-      "slug": "poolside/laguna-xs-2.1:free",
+      "slug": "google/gemma-4-31b-it:free",
       "contextWindow": 262144,
       "supportsTools": true
     },
