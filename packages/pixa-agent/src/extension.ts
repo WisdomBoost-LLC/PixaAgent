@@ -14,7 +14,7 @@ import {
 import { ToolRegistry, registerBuiltinTools } from "./tools/registry";
 import { ChangeSet } from "./edits/changeSet";
 import { EmbeddingIndex } from "./indexer/embeddingIndex";
-import { VectorStore, ensureGitignored } from "./indexer/vectorStore";
+import { VectorStore, ensureGitExcluded } from "./indexer/vectorStore";
 import { WorkspaceIndexer } from "./indexer/workspaceIndexer";
 import type { RepoIndex } from "./indexer/types";
 import { indexWorkspaceWithProgress, registerIncrementalIndexing } from "./indexer/indexingPipeline";
@@ -187,10 +187,8 @@ export function activate(context: vscode.ExtensionContext): void {
   let index: RepoIndex;
 
   // The agent keeps task state in .pixa/ (not just the semantic index), so keep it out of git
-  // in any git workspace, whether or not semantic search is on.
-  if (fs.existsSync(path.join(workspaceRoot, ".git")) && ensureGitignored(workspaceRoot, { enabled: true })) {
-    void vscode.window.showInformationMessage("Pixa: added .pixa/ to .gitignore.");
-  }
+  // in any git workspace. .git/info/exclude is local-only: nothing visible changes in the repo.
+  ensureGitExcluded(workspaceRoot);
 
   if (semanticEnabled) {
     const vectorStore = new VectorStore(workspaceRoot);
