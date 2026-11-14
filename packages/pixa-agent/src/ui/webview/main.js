@@ -12,8 +12,18 @@
   const changesetEl = $("changeset");
   const changesetFiles = $("changeset-files");
 
-  // id -> supportsReasoningEffort, from the host's init message.
+  // id -> supportsReasoningEffort, from the host's init message and each provider catalog.
   const reasoningSupport = new Map();
+
+  // Model picker state: Third-party / Local -> provider -> that provider's live model list.
+  const providerSelect = $("provider-select");
+  const pickerStatus = $("picker-status");
+  let sources = [];
+  let activeKind = "third-party";
+  let activeProviderId = "openrouter";
+  let currentModelId = null;
+  const modelLabels = new Map(); // id -> label, so the current model stays visible if it left the list
+  const modelProviders = new Map(); // id -> provider id
 
   let currentAssistantEl = null;
   let running = false;
@@ -98,14 +108,26 @@
       case "init": {
         modelSelect.innerHTML = "";
         reasoningSupport.clear();
+        sources = msg.sources || [];
+        currentModelId = msg.currentModelId;
+        activeProviderId = msg.currentProviderId || "openrouter";
+        activeKind = (sources.find((s) => s.id === activeProviderId) || {}).kind || "third-party";
         for (const m of msg.models) {
+          reasoningSupport.set(m.id, !!m.supportsReasoningEffort);
+          modelLabels.set(m.id, m.label);
+          modelProviders.set(m.id, m.provider);
+          // Until the live list arrives (or if offline), show the models we already know for this provider.
+          if (m.provider !== activeProviderId) continue;
           const opt = document.createElement("option");
           opt.value = m.id;
           opt.textContent = m.label;
+          opt.dataset.provider = m.provider;
+          opt.dataset.slug = m.slug;
           if (m.id === msg.currentModelId) opt.selected = true;
           modelSelect.appendChild(opt);
-          reasoningSupport.set(m.id, !!m.supportsReasoningEffort);
         }
+        renderPicker();
+        requestCatalog(false);
         populateReasoningOptions();
         updateReasoningVisibility(msg.currentModelId);
         if (msg.currentReasoningEffort) reasoningSelect.value = msg.currentReasoningEffort;
@@ -130,7 +152,11 @@
       case "sessions":
         renderSessions(msg.sessions, msg.activeId);
         break;
+      case "catalog":
+        renderCatalog(msg);
+        break;
       case "active-model-changed":
+        currentModelId = msg.modelId;
         modelSelect.value = msg.modelId;
         // The host clears its effort on any model change, so mirror that here.
         updateReasoningVisibility(msg.modelId);
@@ -466,10 +492,119 @@
     }
   });
   modelSelect.addEventListener("change", () => {
-    vscode.postMessage({ type: "selectModel", modelId: modelSelect.value });
+    const opt = modelSelect.selectedOptions[0];
+    if (!modelSelect.value || !opt || !opt.dataset.slug) return;
+    currentModelId = modelSelect.value;
+    vscode.postMessage({ type: "select-catalog-model", providerId: opt.dataset.provider, slug: opt.dataset.slug });
     // Host resets effort to null on every model switch — keep the UI in step.
     updateReasoningVisibility(modelSelect.value);
   });
+
+  /* ---------- model picker: Third-party | Local -> provider -> live models ---------- */
+
+  function setPickerStatus(text, isError) {
+    pickerStatus.textContent = text || "";
+    pickerStatus.classList.toggle("hidden", !text);
+    pickerStatus.classList.toggle("error", !!isError);
+  }
+
+  function renderPicker() {
+    document.querySelectorAll(".kind-btn").forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
+    providerSelect.innerHTML = "";
+    const list = sources.filter((s) => s.kind === activeKind);
+    if (list.length === 0) {
+      const opt = document.createElement("option");
+      opt.textContent = activeKind === "local" ? "No local provider — add Ollama via ⚙" : "No provider";
+      opt.disabled = true;
+      opt.selected = true;
+      providerSelect.appendChild(opt);
+      activeProviderId = "";
+      return;
+    }
+    if (!list.some((s) => s.id === activeProviderId)) activeProviderId = list[0].id;
+    for (const s of list) {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.name;
+      opt.selected = s.id === activeProviderId;
+      providerSelect.appendChild(opt);
+    }
+  }
+
+  // clear=true when the user switched provider/source, so the old provider's models
+  // never linger under the new provider's name (also if its fetch then fails).
+  function requestCatalog(force, clear) {
+    if (clear || !activeProviderId) modelSelect.innerHTML = "";
+    if (!activeProviderId) {
+      setPickerStatus("");
+      return;
+    }
+    setPickerStatus("Loading models…");
+    vscode.postMessage({ type: "load-catalog", providerId: activeProviderId, force: !!force });
+  }
+
+  const TIER_LABEL = { free: "Free", paid: "Paid", unknown: "Models" };
+
+  function renderCatalog(msg) {
+    if (msg.providerId !== activeProviderId) return; // user already moved on
+    if (msg.models.length === 0) {
+      setPickerStatus("Couldn't load models" + (msg.error ? ": " + msg.error : ".") + " Press ↻ to retry.", true);
+      return;
+    }
+    modelSelect.innerHTML = "";
+    const ids = new Set(msg.models.map((m) => m.id));
+    if (!(currentModelId && ids.has(currentModelId))) {
+      // Keep an active-but-missing model selectable; otherwise prompt for a pick.
+      const first = document.createElement("option");
+      if (currentModelId && modelLabels.has(currentModelId) && modelProviders.get(currentModelId) === activeProviderId) {
+        first.value = currentModelId;
+        first.textContent = modelLabels.get(currentModelId) + " (current)";
+        first.dataset.provider = activeProviderId;
+        first.dataset.slug = "";
+      } else {
+        first.value = "";
+        first.textContent = "Select a model…";
+        first.disabled = true;
+      }
+      first.selected = true;
+      modelSelect.appendChild(first);
+    }
+    for (const tier of ["free", "paid", "unknown"]) {
+      const group = msg.models.filter((m) => m.tier === tier).sort((a, b) => a.name.localeCompare(b.name));
+      if (group.length === 0) continue;
+      const og = document.createElement("optgroup");
+      og.label = TIER_LABEL[tier] + " (" + group.length + ")";
+      for (const m of group) {
+        reasoningSupport.set(m.id, !!m.supportsReasoningEffort);
+        modelLabels.set(m.id, m.name);
+        modelProviders.set(m.id, msg.providerId);
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.name + " · " + Math.round(m.contextWindow / 1000) + "k" + (m.supportsTools === false ? " · no tools" : "");
+        opt.dataset.provider = msg.providerId;
+        opt.dataset.slug = m.slug;
+        if (m.id === currentModelId) opt.selected = true;
+        og.appendChild(opt);
+      }
+      modelSelect.appendChild(og);
+    }
+    setPickerStatus(msg.stale ? "Offline — showing the last saved list. Press ↻ to retry." : "", false);
+    updateReasoningVisibility(currentModelId);
+  }
+
+  document.querySelectorAll(".kind-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (activeKind === b.dataset.kind) return;
+      activeKind = b.dataset.kind;
+      renderPicker();
+      requestCatalog(false, true);
+    })
+  );
+  providerSelect.addEventListener("change", () => {
+    activeProviderId = providerSelect.value;
+    requestCatalog(false, true);
+  });
+  $("refresh-models").addEventListener("click", () => requestCatalog(true));
   reasoningSelect.addEventListener("change", () =>
     vscode.postMessage({ type: "selectReasoningEffort", value: reasoningSelect.value || null })
   );

@@ -27,6 +27,9 @@ import type { ChatMessage } from "../providers/types";
 import type { ProvidersConfig } from "../providers/config";
 import { validateProviderForm, parseModelsResponse, modelsEndpointUrl } from "../providers/providerForm";
 import { providerSecretKey } from "../providers/secretKeys";
+import type { CatalogService, CatalogSource } from "../providers/catalogService";
+import { catalogToEntry, isLocalBaseUrl } from "../providers/catalog";
+import { LAST_MODEL_KEY, PICKED_MODELS_KEY, rememberPicked } from "../providers/pickedModels";
 
 const SESSIONS_KEY = "pixa.sessions.v1";
 const MAX_SESSIONS = 30;
@@ -51,6 +54,8 @@ type WebviewMessage =
   | { type: "send"; text: string }
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
+  | { type: "load-catalog"; providerId: string; force?: boolean }
+  | { type: "select-catalog-model"; providerId: string; slug: string }
   | { type: "selectReasoningEffort"; value: ReasoningEffort | null }
   | { type: "approval-response"; requestId: string; approved: boolean }
   | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "reject-all" | "open-diff" | "revert" }
@@ -90,7 +95,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     private changeSet: ChangeSet,
     private index: RepoIndex,
     private diffPreview: DiffPreview,
-    private workspaceRoot: string
+    private workspaceRoot: string,
+    private catalog: CatalogService
   ) {
     this.currentModelId = this.resolveDefaultModelId();
     const ctx: ToolContext = {
@@ -146,9 +152,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     });
   }
 
+  /** Where the picker can list models from: built-in OpenRouter plus every provider in pixa.providers. */
+  private catalogSources(): CatalogSource[] {
+    const cfg = vscode.workspace.getConfiguration("pixa").get<ProvidersConfig>("providers") ?? {};
+    const sources: CatalogSource[] = [
+      { id: "openrouter", name: "OpenRouter", kind: "third-party", baseUrl: "https://openrouter.ai/api/v1", parser: "openrouter", requiresApiKey: false },
+    ];
+    for (const [id, p] of Object.entries(cfg)) {
+      if (!p?.baseUrl) continue;
+      sources.push({
+        id,
+        name: p.name?.trim() || id,
+        kind: isLocalBaseUrl(p.baseUrl) ? "local" : "third-party",
+        baseUrl: p.baseUrl,
+        parser: "openai",
+        requiresApiKey: p.requiresApiKey !== false,
+      });
+    }
+    return sources;
+  }
+
   private resolveDefaultModelId(): string {
-    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-free";
     const chatModels = this.models.filter((m) => m.provider !== "local-embeddings");
+    // What the user last picked wins over the static default, so the choice survives a reload.
+    const last = this.context.globalState.get<string>(LAST_MODEL_KEY);
+    if (last && chatModels.some((m) => m.id === last)) return last;
+    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-free";
     return chatModels.some((m) => m.id === configured) ? configured : chatModels[0]?.id ?? "nemotron-free";
   }
 
@@ -310,10 +339,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
             .map((m) => ({
               id: m.id,
               label: m.label,
+              provider: m.provider,
+              slug: m.slug,
               // Drives whether the webview shows the thinking-effort picker.
               supportsReasoningEffort: m.supportsReasoningEffort === true,
             })),
           currentModelId: this.currentModelId,
+          currentProviderId: this.models.find((m) => m.id === this.currentModelId)?.provider ?? "openrouter",
+          sources: this.catalogSources().map(({ id, name, kind }) => ({ id, name, kind })),
           currentReasoningEffort: this.currentReasoningEffort,
           hasApiKey,
         } as any);
@@ -349,8 +382,50 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           // The previous effort choice may not apply to the new model — a
           // model that doesn't support it would reject the field outright.
           this.currentReasoningEffort = null;
+          void this.context.globalState.update(LAST_MODEL_KEY, msg.modelId);
         }
         break;
+      case "load-catalog": {
+        const source = this.catalogSources().find((s) => s.id === msg.providerId);
+        if (!source) break;
+        const result = await this.catalog.load(source, msg.force === true);
+        this.post({
+          type: "catalog",
+          providerId: source.id,
+          stale: result.stale,
+          error: result.error,
+          models: result.models.map((m) => ({
+            // Reuse an existing entry's id (e.g. the bundled "glm") so the current selection matches.
+            id: this.models.find((e) => e.provider === source.id && e.slug === m.slug)?.id ?? `${source.id}:${m.slug}`,
+            slug: m.slug,
+            name: m.name,
+            tier: m.tier,
+            contextWindow: m.contextWindow,
+            supportsTools: m.supportsTools,
+            supportsReasoningEffort: m.supportsReasoningEffort,
+          })),
+        } as any);
+        break;
+      }
+      case "select-catalog-model": {
+        let entry = this.models.find((m) => m.provider === msg.providerId && m.slug === msg.slug);
+        if (!entry) {
+          const found = this.catalog.cached(msg.providerId).find((m) => m.slug === msg.slug);
+          if (!found || !this.registry.has(msg.providerId)) {
+            this.post({ type: "error", message: `Can't use "${msg.slug}": provider "${msg.providerId}" isn't available. Reload the window if you just added it.` });
+            break;
+          }
+          entry = catalogToEntry(msg.providerId, found);
+          // Same array the agent loop holds, so the new entry is resolvable immediately.
+          this.models.push(entry);
+          const picked = this.context.globalState.get<ModelEntry[]>(PICKED_MODELS_KEY) ?? [];
+          void this.context.globalState.update(PICKED_MODELS_KEY, rememberPicked(picked, entry));
+        }
+        this.currentModelId = entry.id;
+        this.currentReasoningEffort = null;
+        void this.context.globalState.update(LAST_MODEL_KEY, entry.id);
+        break;
+      }
       case "selectReasoningEffort":
         this.currentReasoningEffort = msg.value;
         break;
@@ -730,6 +805,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       <button id="new-session" class="icon-btn" title="New chat">＋</button>
       <button id="show-providers" class="icon-btn" title="Providers">⚙</button>
     </div>
+    <div id="picker-row">
+      <div id="kind-toggle" role="group" aria-label="Model source">
+        <button id="kind-third-party" class="kind-btn" data-kind="third-party">Third-party</button>
+        <button id="kind-local" class="kind-btn" data-kind="local">Local</button>
+      </div>
+      <select id="provider-select" title="Provider"></select>
+      <button id="refresh-models" class="icon-btn" title="Refresh this provider's model list">↻</button>
+    </div>
+    <div id="picker-status" class="hidden"></div>
     <div id="history-panel" class="hidden">
       <div id="history-header">
         <span>Chats</span>

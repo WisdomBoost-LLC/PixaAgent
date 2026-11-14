@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadModels, ProviderRegistry } from "./providers/registry";
+import { CatalogService } from "./providers/catalogService";
+import { PICKED_MODELS_KEY } from "./providers/pickedModels";
 import { OpenRouterProvider } from "./providers/openrouter";
 import {
   LocalEmbeddingsProvider,
@@ -150,6 +152,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const userModels = registerUserProviders(context, providers, log);
   const models = [...bundledModels, ...userModels];
   providers.register(new LocalEmbeddingsProvider());
+
+  // Models the user picked from a provider's live list in a previous session.
+  // They are not in models.json or settings, so restore them here — only when
+  // their provider is still registered, so a removed provider can't leave a dead entry.
+  for (const picked of context.globalState.get<ModelEntry[]>(PICKED_MODELS_KEY) ?? []) {
+    if (providers.has(picked.provider) && !models.some((m) => m.id === picked.id)) models.push(picked);
+  }
+  const catalog = new CatalogService(
+    { get: (k) => context.globalState.get(k), update: (k, v) => context.globalState.update(k, v) },
+    fetch,
+    Date.now,
+    (providerId) => Promise.resolve(context.secrets.get(providerSecretKey(providerId)))
+  );
 
   fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
   initEmbeddingCache(context.globalStorageUri.fsPath);
@@ -365,7 +380,8 @@ export function activate(context: vscode.ExtensionContext): void {
     changeSet,
     index,
     diffPreview,
-    workspaceRoot
+    workspaceRoot,
+    catalog
   );
 
   context.subscriptions.push(

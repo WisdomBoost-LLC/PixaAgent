@@ -44,6 +44,10 @@ export class ProviderRegistry {
     this.providers.set(provider.id, provider);
   }
 
+  has(providerId: string): boolean {
+    return this.providers.has(providerId);
+  }
+
   resolve(modelId: string, models: ModelEntry[]): { provider: ModelProvider; entry: ModelEntry } {
     const entry = models.find((m) => m.id === modelId);
     if (!entry) {
