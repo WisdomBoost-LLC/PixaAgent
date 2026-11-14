@@ -171,12 +171,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const semanticEnabled = isSemanticSearchEnabled(workspaceRoot);
   let index: RepoIndex;
 
-  if (semanticEnabled) {
-    const mutated = ensureGitignored(workspaceRoot, { enabled: true });
-    if (mutated) {
-      void vscode.window.showInformationMessage("Pixa: added .pixa/ to .gitignore.");
-    }
+  // The agent keeps task state in .pixa/ (not just the semantic index), so keep it out of git
+  // in any git workspace, whether or not semantic search is on.
+  if (fs.existsSync(path.join(workspaceRoot, ".git")) && ensureGitignored(workspaceRoot, { enabled: true })) {
+    void vscode.window.showInformationMessage("Pixa: added .pixa/ to .gitignore.");
+  }
 
+  if (semanticEnabled) {
     const vectorStore = new VectorStore(workspaceRoot);
     index = new EmbeddingIndex(workspaceRoot, vectorStore);
     log("VectorStore constructed — .pixa/index/ should now exist on disk.");
