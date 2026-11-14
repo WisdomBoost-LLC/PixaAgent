@@ -67,28 +67,29 @@ function chunkMetaFromChunk(chunk: Chunk): ChunkMetadata {
 }
 
 /**
- * Ensures .pixa/ is added to .gitignore.
- * Returns true if .gitignore was mutated, false if it was already present or disabled.
+ * Keeps .pixa/ out of git via .git/info/exclude — a local, never-committed
+ * ignore file, so this never dirties the user's repo or edits their .gitignore.
+ * No-op outside a plain git repo (no .git directory, e.g. worktrees/submodules).
+ * Returns true if the exclude file was changed.
  */
-export function ensureGitignored(
-  workspaceRoot: string,
-  options?: { enabled?: boolean }
-): boolean {
-  if (options?.enabled === false) return false;
-  const gitignorePath = path.join(workspaceRoot, ".gitignore");
+export function ensureGitExcluded(workspaceRoot: string): boolean {
+  const gitDir = path.join(workspaceRoot, ".git");
+  const excludePath = path.join(gitDir, "info", "exclude");
   const entry = ".pixa/";
   try {
-    if (!fs.existsSync(gitignorePath)) {
-      fs.writeFileSync(gitignorePath, `${entry}\n`);
+    if (!fs.statSync(gitDir).isDirectory()) return false;
+    if (!fs.existsSync(excludePath)) {
+      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
+      fs.writeFileSync(excludePath, `${entry}\n`);
       return true;
     }
-    const existing = fs.readFileSync(gitignorePath, "utf8");
+    const existing = fs.readFileSync(excludePath, "utf8");
     const alreadyPresent = existing
       .split(/\r?\n/)
       .some((line) => line.trim() === entry || line.trim() === ".pixa");
     if (!alreadyPresent) {
       const needsNewline = existing.length > 0 && !existing.endsWith("\n");
-      fs.appendFileSync(gitignorePath, `${needsNewline ? "\n" : ""}${entry}\n`);
+      fs.appendFileSync(excludePath, `${needsNewline ? "\n" : ""}${entry}\n`);
       return true;
     }
     return false;

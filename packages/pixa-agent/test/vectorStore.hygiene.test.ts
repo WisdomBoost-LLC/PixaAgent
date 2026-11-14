@@ -2,13 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { ensureGitignored } from "../src/indexer/vectorStore";
+import { ensureGitExcluded } from "../src/indexer/vectorStore";
 
-describe("ensureGitignored hygiene", () => {
+describe("ensureGitExcluded hygiene", () => {
   let tempDir: string;
+  let excludePath: string;
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pixa-hygiene-"));
+    fs.mkdirSync(path.join(tempDir, ".git"));
+    excludePath = path.join(tempDir, ".git", "info", "exclude");
   });
 
   afterEach(() => {
@@ -19,57 +22,44 @@ describe("ensureGitignored hygiene", () => {
     }
   });
 
-  it("creates .gitignore with .pixa/\\n when missing", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-    expect(fs.existsSync(gitignorePath)).toBe(false);
-
-    const mutated = ensureGitignored(tempDir);
-    expect(mutated).toBe(true);
-    expect(fs.existsSync(gitignorePath)).toBe(true);
-    expect(fs.readFileSync(gitignorePath, "utf8")).toBe(".pixa/\n");
+  it("creates .git/info/exclude with .pixa/\\n when missing, and never touches .gitignore", () => {
+    expect(ensureGitExcluded(tempDir)).toBe(true);
+    expect(fs.readFileSync(excludePath, "utf8")).toBe(".pixa/\n");
+    expect(fs.existsSync(path.join(tempDir, ".gitignore"))).toBe(false);
   });
 
-  it("appends .pixa/\\n with correct newline handling when present without trailing newline", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-    fs.writeFileSync(gitignorePath, "node_modules");
-
-    const mutated = ensureGitignored(tempDir);
-    expect(mutated).toBe(true);
-    expect(fs.readFileSync(gitignorePath, "utf8")).toBe("node_modules\n.pixa/\n");
+  it("appends with correct newline handling when the file lacks a trailing newline", () => {
+    fs.mkdirSync(path.dirname(excludePath));
+    fs.writeFileSync(excludePath, "# local excludes");
+    expect(ensureGitExcluded(tempDir)).toBe(true);
+    expect(fs.readFileSync(excludePath, "utf8")).toBe("# local excludes\n.pixa/\n");
   });
 
-  it("appends .pixa/\\n with correct newline handling when present with trailing newline", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-    fs.writeFileSync(gitignorePath, "node_modules/\n");
-
-    const mutated = ensureGitignored(tempDir);
-    expect(mutated).toBe(true);
-    expect(fs.readFileSync(gitignorePath, "utf8")).toBe("node_modules/\n.pixa/\n");
+  it("is a no-op when .pixa/ or .pixa is already present", () => {
+    fs.mkdirSync(path.dirname(excludePath));
+    fs.writeFileSync(excludePath, "node_modules/\n.pixa\n");
+    expect(ensureGitExcluded(tempDir)).toBe(false);
+    expect(fs.readFileSync(excludePath, "utf8")).toBe("node_modules/\n.pixa\n");
   });
 
-  it("is a no-op when .pixa/ is already present", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-    fs.writeFileSync(gitignorePath, "node_modules/\n.pixa/\n");
-
-    const mutated = ensureGitignored(tempDir);
-    expect(mutated).toBe(false);
-    expect(fs.readFileSync(gitignorePath, "utf8")).toBe("node_modules/\n.pixa/\n");
+  it("does nothing outside a git repo", () => {
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "pixa-nogit-"));
+    try {
+      expect(ensureGitExcluded(plain)).toBe(false);
+      expect(fs.readdirSync(plain)).toEqual([]);
+    } finally {
+      fs.rmSync(plain, { recursive: true, force: true });
+    }
   });
 
-  it("is a no-op when .pixa (without slash) is already present", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-    fs.writeFileSync(gitignorePath, "node_modules/\n.pixa\n");
-
-    const mutated = ensureGitignored(tempDir);
-    expect(mutated).toBe(false);
-    expect(fs.readFileSync(gitignorePath, "utf8")).toBe("node_modules/\n.pixa\n");
-  });
-
-  it("makes no writes when called with the disabled option", () => {
-    const gitignorePath = path.join(tempDir, ".gitignore");
-
-    const mutated = ensureGitignored(tempDir, { enabled: false });
-    expect(mutated).toBe(false);
-    expect(fs.existsSync(gitignorePath)).toBe(false);
+  it("does nothing when .git is a file (worktree/submodule)", () => {
+    const wt = fs.mkdtempSync(path.join(os.tmpdir(), "pixa-wt-"));
+    try {
+      fs.writeFileSync(path.join(wt, ".git"), "gitdir: /elsewhere\n");
+      expect(ensureGitExcluded(wt)).toBe(false);
+      expect(fs.readdirSync(wt)).toEqual([".git"]);
+    } finally {
+      fs.rmSync(wt, { recursive: true, force: true });
+    }
   });
 });

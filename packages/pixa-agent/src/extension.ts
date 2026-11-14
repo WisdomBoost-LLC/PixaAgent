@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadModels, ProviderRegistry } from "./providers/registry";
+import { CatalogService } from "./providers/catalogService";
+import { PICKED_MODELS_KEY } from "./providers/pickedModels";
 import { OpenRouterProvider } from "./providers/openrouter";
 import {
   LocalEmbeddingsProvider,
@@ -12,7 +14,7 @@ import {
 import { ToolRegistry, registerBuiltinTools } from "./tools/registry";
 import { ChangeSet } from "./edits/changeSet";
 import { EmbeddingIndex } from "./indexer/embeddingIndex";
-import { VectorStore, ensureGitignored } from "./indexer/vectorStore";
+import { VectorStore, ensureGitExcluded } from "./indexer/vectorStore";
 import { WorkspaceIndexer } from "./indexer/workspaceIndexer";
 import type { RepoIndex } from "./indexer/types";
 import { indexWorkspaceWithProgress, registerIncrementalIndexing } from "./indexer/indexingPipeline";
@@ -151,6 +153,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const models = [...bundledModels, ...userModels];
   providers.register(new LocalEmbeddingsProvider());
 
+  // Models the user picked from a provider's live list in a previous session.
+  // They are not in models.json or settings, so restore them here — only when
+  // their provider is still registered, so a removed provider can't leave a dead entry.
+  for (const picked of context.globalState.get<ModelEntry[]>(PICKED_MODELS_KEY) ?? []) {
+    if (providers.has(picked.provider) && !models.some((m) => m.id === picked.id)) models.push(picked);
+  }
+  const catalog = new CatalogService(
+    { get: (k) => context.globalState.get(k), update: (k, v) => context.globalState.update(k, v) },
+    fetch,
+    Date.now,
+    (providerId) => Promise.resolve(context.secrets.get(providerSecretKey(providerId)))
+  );
+
   fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
   initEmbeddingCache(context.globalStorageUri.fsPath);
   log(`Embedding model cache dir: ${context.globalStorageUri.fsPath}`);
@@ -172,10 +187,8 @@ export function activate(context: vscode.ExtensionContext): void {
   let index: RepoIndex;
 
   // The agent keeps task state in .pixa/ (not just the semantic index), so keep it out of git
-  // in any git workspace, whether or not semantic search is on.
-  if (fs.existsSync(path.join(workspaceRoot, ".git")) && ensureGitignored(workspaceRoot, { enabled: true })) {
-    void vscode.window.showInformationMessage("Pixa: added .pixa/ to .gitignore.");
-  }
+  // in any git workspace. .git/info/exclude is local-only: nothing visible changes in the repo.
+  ensureGitExcluded(workspaceRoot);
 
   if (semanticEnabled) {
     const vectorStore = new VectorStore(workspaceRoot);
@@ -365,7 +378,8 @@ export function activate(context: vscode.ExtensionContext): void {
     changeSet,
     index,
     diffPreview,
-    workspaceRoot
+    workspaceRoot,
+    catalog
   );
 
   context.subscriptions.push(
