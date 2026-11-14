@@ -288,5 +288,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 [MIT](LICENSE) — use it, fork it, ship it.
 
 <div align="center">
-<sub>Built by <a href="https://github.com/WisdomBoost-LLC">Pixaflip Technologies</a></sub>
+<sub>Built by <a href="https://pixaflip.com/">Pixaflip Technologies</a></sub>
 </div>
